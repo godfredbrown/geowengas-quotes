@@ -1,7 +1,7 @@
 /* GEOWENGAS Quote Builder — the app (index.html). Everything is stored on this phone/browser. */
 (function(){
 "use strict";
-const {BIZ, STD_CONDS, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, checkCode,
+const {BIZ, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, checkCode,
   encodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, safeName, toast, logoReady} = window.GW;
 
 const DEFAULT_CATALOG = [
@@ -24,7 +24,15 @@ const LS = {
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } }
 };
 const mergeName = o => { if(o && o.name != null){ const n=(o.name||"").trim(), d=(o.desc||"").trim(); o.desc = n && d && n!==d ? `${n}: ${d}` : (n||d); delete o.name; } return o; };
-const migrateQuote = q => { if(q && Array.isArray(q.items)) q.items.forEach(mergeName); return q; };
+const migrateQuote = q => {
+  if(!q) return q;
+  if(Array.isArray(q.items)) q.items.forEach(mergeName);
+  if(q.client && q.client.eventEnd == null) q.client.eventEnd = "";
+  if(q.depositAuto == null) q.depositAuto = !num(q.deposit);
+  return q;
+};
+/* Drafts still on the original six conditions get the new seventh one. */
+const upgradeConds = q => { if(q && q.status === "draft" && Array.isArray(q.conditions) && q.conditions.length === 6 && q.conditions.every((c,i) => c === STD_CONDS[i])) q.conditions = STD_CONDS.slice(); return q; };
 
 let catalog = LS.get("gw_catalog", null);
 const catalogIsExample = !catalog;
@@ -52,14 +60,14 @@ function recordNo(no){ const n = seqOf(no); if(n){ const k = counterKey(); LS.se
 function blankQuote(){
   const today = iso(new Date());
   return {id:"q"+Date.now(), no:nextQuoteNo(), date:today, valid:addDays(today,14), status:"draft",
-    client:{name:"",phone:"",email:"",event:"",eventDate:"",guests:"",venue:""},
-    items:[blankItem()], setup:"", delivery:"", discount:"", deposit:"",
+    client:{name:"",phone:"",email:"",event:"",eventDate:"",eventEnd:"",guests:"",venue:""},
+    items:[blankItem()], setup:"", delivery:"", discount:"", deposit:"", depositAuto:true,
     scope:"", conditions:STD_CONDS.slice(), example:false};
 }
 function exampleQuote(){
   const q = blankQuote();
   q.example = true;
-  q.client = {name:"Mr. & Mrs. Kwame Asante (example)", phone:"024 000 0000", email:"", event:"Wedding reception", eventDate:addDays(q.date,45), guests:"200", venue:"Trinity Hall, Dome"};
+  q.client = {name:"Mr. & Mrs. Kwame Asante (example)", phone:"024 000 0000", email:"", event:"Wedding reception", eventDate:addDays(q.date,45), eventEnd:addDays(q.date,46), guests:"200", venue:"Trinity Hall, Dome"};
   q.items = [
     {desc:"Gold chiavari chairs with cushion",qty:"200",price:"15"},
     {desc:"Round tables (seat 8–10)",qty:"20",price:"25"},
@@ -68,31 +76,69 @@ function exampleQuote(){
     {desc:"Stage décor: backdrop, drapes & florals",qty:"1",price:"2500"},
     {desc:"Canopy with sides",qty:"4",price:"150"}
   ];
-  q.setup = "400"; q.delivery = "200"; q.deposit = "1000";
+  q.setup = "400"; q.delivery = "200";
   q.scope = "Includes setup from 7:00 am on the event day and breakdown after the event.\nExcludes catering, drinks and venue hire.";
   return q;
 }
-let Q = migrateQuote(LS.get("gw_draft", null)) || (savedQuotes().length ? blankQuote() : exampleQuote());
+let Q = upgradeConds(migrateQuote(LS.get("gw_draft", null))) || (savedQuotes().length ? blankQuote() : exampleQuote());
 
 /* ---------- editor ---------- */
-const fieldMap = {qNo:["no"],qDate:["date"],qValid:["valid"],qStatus:["status"],cName:["client","name"],cPhone:["client","phone"],cEmail:["client","email"],cEvent:["client","event"],cDate:["client","eventDate"],cGuests:["client","guests"],cVenue:["client","venue"],chSetup:["setup"],chDelivery:["delivery"],chDiscount:["discount"],chDeposit:["deposit"],scope:["scope"]};
+const fieldMap = {qNo:["no"],qDate:["date"],qValid:["valid"],qStatus:["status"],cName:["client","name"],cPhone:["client","phone"],cEmail:["client","email"],cEvent:["client","event"],cDate:["client","eventDate"],cDateEnd:["client","eventEnd"],cGuests:["client","guests"],cVenue:["client","venue"],chSetup:["setup"],chDelivery:["delivery"],chDiscount:["discount"],scope:["scope"]};
 const getPath = p => p.length === 1 ? Q[p[0]] : Q[p[0]][p[1]];
 const setPath = (p,v) => { if(p.length === 1) Q[p[0]] = v; else Q[p[0]][p[1]] = v; };
-function fillFields(){ for(const id in fieldMap) $(id).value = getPath(fieldMap[id]) ?? ""; }
+function fillFields(){
+  for(const id in fieldMap) $(id).value = getPath(fieldMap[id]) ?? "";
+  $("cDateEnd").min = Q.client.eventDate || "";
+  $("chDepositAuto").checked = !!Q.depositAuto;
+  syncDeposit(); renderNoHelp();
+}
 for(const id in fieldMap){
   $(id).addEventListener("input", e => {
     setPath(fieldMap[id], e.target.value);
     if(id === "qDate" && !Q._validTouched){ Q.valid = addDays(e.target.value,14); $("qValid").value = Q.valid; }
     if(id === "qValid") Q._validTouched = true;
+    if(id === "qNo") Q._noEdited = e.target.value.trim() !== nextQuoteNo();
+    if(id === "cDate"){ $("cDateEnd").min = Q.client.eventDate || ""; if(Q.client.eventEnd && Q.client.eventEnd < Q.client.eventDate){ Q.client.eventEnd = ""; $("cDateEnd").value = ""; } }
+    if(id === "cDateEnd" && Q.client.eventEnd && Q.client.eventDate && Q.client.eventEnd < Q.client.eventDate){ Q.client.eventEnd = Q.client.eventDate; e.target.value = Q.client.eventEnd; }
     changed();
   });
+}
+
+/* ---------- refundable deposit: 15% of the total unless typed in ---------- */
+function syncDeposit(){
+  const d = $("chDeposit");
+  if(Q.depositAuto){ d.readOnly = true; d.value = totals(Q).dep ? totals(Q).dep.toFixed(2) : ""; }
+  else { d.readOnly = false; if(document.activeElement !== d) d.value = Q.deposit ?? ""; }
+}
+$("chDepositAuto").addEventListener("change", e => {
+  Q.depositAuto = e.target.checked;
+  if(!Q.depositAuto) Q.deposit = totals({...Q, depositAuto:true}).dep.toFixed(2);
+  syncDeposit(); changed();
+  if(!Q.depositAuto){ $("chDeposit").focus(); $("chDeposit").select(); }
+});
+$("chDeposit").addEventListener("input", e => { if(Q.depositAuto) return; Q.deposit = e.target.value; changed(); });
+
+/* ---------- quote number: filled in automatically, can be typed over ---------- */
+function ensureQuoteNo(){
+  if(Q.example || isSaved(Q) || Q._noEdited) return;
+  const next = nextQuoteNo();
+  if(Q.no !== next){ Q.no = next; $("qNo").value = next; LS.set("gw_draft", Q); }
+}
+function renderNoHelp(){
+  const h = $("qNoHelp"); if(!h) return;
+  const clash = savedQuotes().find(x => x.no === Q.no && x.id !== Q.id);
+  const next = nextQuoteNo();
+  if(clash){ h.className = "field-help warn"; h.innerHTML = `${esc(Q.no)} is already used by ${esc(clash.client.name || "another quote")}. <button type="button" class="linkbtn" id="qNoFix">Use ${esc(next)}</button>`; }
+  else if(!isSaved(Q) && Q.no !== next && !Q.example){ h.className = "field-help"; h.innerHTML = `Typed by hand. <button type="button" class="linkbtn" id="qNoFix">Use the next number (${esc(next)})</button>`; }
+  else { h.className = "field-help"; h.innerHTML = isSaved(Q) ? "" : "Filled in automatically. You can type a different one."; }
+  const b = $("qNoFix"); if(b) b.onclick = () => { Q.no = nextQuoteNo(); Q._noEdited = false; $("qNo").value = Q.no; changed(); };
 }
 
 function renderItems(){
   let h = `<div class="item item-h"><span>Description</span><span style="text-align:right">Qty</span><span style="text-align:right">Unit price</span><span style="text-align:right">Amount</span><span></span></div>`;
   Q.items.forEach((it,i) => {
     h += `<div class="item" data-i="${i}">
-      <input class="i-desc" id="it-desc-${i}" list="catList" aria-label="Line ${i+1} description" value="${esc(it.desc)}" placeholder="Description">
+      <input class="i-desc" id="it-desc-${i}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="pick" aria-label="Line ${i+1} description" value="${esc(it.desc)}" placeholder="Description">
       <input class="i-qty" id="it-qty-${i}" type="number" min="0" inputmode="numeric" aria-label="Line ${i+1} quantity" value="${esc(it.qty)}" placeholder="Qty">
       <input class="i-price" id="it-price-${i}" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Line ${i+1} unit price" value="${esc(it.price)}" placeholder="Price GHC">
       <span class="amt" id="it-amt-${i}">${money(num(it.qty)*num(it.price))}</span>
@@ -104,11 +150,7 @@ function renderItems(){
 $("items").addEventListener("input", e => {
   const row = e.target.closest(".item"); if(!row || row.classList.contains("item-h")) return;
   const i = +row.dataset.i, it = Q.items[i], t = e.target;
-  if(t.classList.contains("i-desc")){
-    it.desc = t.value;
-    const c = catalog.find(c => c.desc.toLowerCase() === t.value.trim().toLowerCase());
-    if(c){ if(!it.price){ it.price = String(c.price); $("it-price-"+i).value = c.price; } if(!it.qty){ it.qty = "1"; $("it-qty-"+i).value = "1"; } }
-  }
+  if(t.classList.contains("i-desc")){ it.desc = t.value; openPick(t); }
   if(t.classList.contains("i-qty")) it.qty = t.value;
   if(t.classList.contains("i-price")) it.price = t.value;
   $("it-amt-"+i).textContent = money(num(it.qty)*num(it.price));
@@ -123,9 +165,55 @@ $("items").addEventListener("click", e => {
 $("addRow").onclick = () => { Q.items.push(blankItem()); renderItems(); changed(); $("it-desc-"+(Q.items.length-1)).focus(); };
 
 function renderCatalogBits(){
-  $("catList").innerHTML = catalog.map(c => `<option value="${esc(c.desc)}">`).join("");
   $("quick").innerHTML = catalog.map((c,i) => `<button type="button" data-cat="${i}">+ ${esc(c.desc)}</button>`).join("");
 }
+/* ---------- searchable item picker for the description box ---------- */
+const pick = $("pick"); let pickInput = null, pickSel = -1, pickList = [];
+const norm = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+function hl(text, words){
+  let out = esc(text);
+  words.filter(Boolean).forEach(w => { const re = new RegExp("(" + w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + ")", "ig"); out = out.replace(re, "<mark>$1</mark>"); });
+  return out;
+}
+function openPick(input){
+  pickInput = input;
+  const words = norm(input.value).split(/\s+/).filter(Boolean);
+  pickList = catalog.map((c,i) => ({c,i})).filter(({c}) => { const d = norm(c.desc); return words.every(w => d.includes(w)); });
+  pickSel = -1;
+  pick.innerHTML = `<div class="ph">${words.length ? `${pickList.length} matching item${pickList.length === 1 ? "" : "s"}` : "Price list · type to search"}</div>` +
+    (pickList.length ? pickList.map((x,k) => `<button type="button" role="option" data-k="${k}" aria-selected="false"><span>${hl(x.c.desc, words)}</span><span>GHC ${amt(x.c.price)}</span></button>`).join("")
+      : `<div class="none">Not in the price list. What you typed will be used as the description.</div>`);
+  placePick(); pick.hidden = false; input.setAttribute("aria-expanded","true");
+}
+function placePick(){
+  if(!pickInput || pick.hidden && !pickInput) return;
+  const r = pickInput.getBoundingClientRect();
+  const w = Math.max(r.width, Math.min(420, document.documentElement.clientWidth - 32));
+  let left = r.left + window.scrollX; left = Math.min(left, window.scrollX + document.documentElement.clientWidth - w - 16); left = Math.max(window.scrollX + 16, left);
+  pick.style.left = left + "px"; pick.style.top = (r.bottom + window.scrollY + 4) + "px"; pick.style.width = w + "px";
+}
+function closePick(){ pick.hidden = true; if(pickInput) pickInput.setAttribute("aria-expanded","false"); pickInput = null; }
+function choosePick(k){
+  const x = pickList[k]; if(!x || !pickInput) return;
+  const row = pickInput.closest(".item"), i = +row.dataset.i, it = Q.items[i];
+  it.desc = x.c.desc; it.price = String(x.c.price); if(!num(it.qty)) it.qty = "1";
+  closePick(); renderItems(); changed();
+  const q = $("it-qty-"+i); q.focus(); q.select();
+}
+pick.addEventListener("mousedown", e => e.preventDefault());
+pick.addEventListener("click", e => { const b = e.target.closest("[data-k]"); if(b) choosePick(+b.dataset.k); });
+$("items").addEventListener("focusin", e => { if(e.target.classList.contains("i-desc")) openPick(e.target); });
+$("items").addEventListener("focusout", e => { if(e.target.classList.contains("i-desc")) setTimeout(() => { if(document.activeElement !== pickInput) closePick(); }, 150); });
+$("items").addEventListener("keydown", e => {
+  if(!e.target.classList.contains("i-desc") || pick.hidden) return;
+  const opts = pick.querySelectorAll("[data-k]");
+  if(e.key === "ArrowDown" || e.key === "ArrowUp"){ e.preventDefault(); if(!opts.length) return; pickSel = (pickSel + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length; opts.forEach((o,k) => o.setAttribute("aria-selected", k === pickSel)); opts[pickSel].scrollIntoView({block:"nearest"}); }
+  else if(e.key === "Enter"){ if(pickSel >= 0){ e.preventDefault(); choosePick(pickSel); } else closePick(); }
+  else if(e.key === "Escape"){ closePick(); }
+});
+window.addEventListener("resize", () => { if(!pick.hidden) placePick(); });
+document.addEventListener("scroll", () => { if(!pick.hidden) placePick(); }, true);
+
 $("quick").addEventListener("click", e => {
   const b = e.target.closest("[data-cat]"); if(!b) return;
   const c = catalog[+b.dataset.cat];
@@ -169,8 +257,8 @@ function renderCount(){
   $("cntNext").textContent = nextQuoteNo(cfg);
 }
 let draftTimer;
-function changed(){ renderPaper(); clearTimeout(draftTimer); draftTimer = setTimeout(() => LS.set("gw_draft", Q), 300); }
-function renderAll(){ fillFields(); renderItems(); renderConds(); renderCatalogBits(); renderPaper(); renderCount(); }
+function changed(){ syncDeposit(); renderNoHelp(); renderPaper(); clearTimeout(draftTimer); draftTimer = setTimeout(() => LS.set("gw_draft", Q), 300); }
+function renderAll(){ ensureQuoteNo(); fillFields(); renderItems(); renderConds(); renderCatalogBits(); renderPaper(); renderCount(); }
 
 /* ---------- save / new ---------- */
 function saveQuote(silent){
@@ -180,7 +268,7 @@ function saveQuote(silent){
   if(i >= 0) list[i] = copy; else list.unshift(copy);
   recordNo(Q.no);
   Q.example = false;
-  const ok = LS.set("gw_quotes", list); LS.set("gw_draft", Q); renderPaper(); renderCount();
+  const ok = LS.set("gw_quotes", list); LS.set("gw_draft", Q); renderPaper(); renderCount(); renderNoHelp();
   if(!silent) toast(ok ? `Saved ${Q.no}` : "Couldn't save. The phone's storage may be full.");
   return ok;
 }
@@ -229,7 +317,7 @@ function showSaved(){
   const list = savedQuotes();
   const body = list.length ? list.map(q => { const t = totals(q); return `<div class="saved">
       <div style="min-width:0"><div class="t">${esc(q.no)} · ${esc(q.client.name||"No client name")} <span class="chip ${q.status}">${STATUS_LABEL[q.status]||"Draft"}</span></div>
-      <div class="s">${esc(q.client.event||"Event")}${q.client.eventDate ? " · "+esc(longDate(q.client.eventDate)) : ""} · ${money(t.total)}</div></div>
+      <div class="s">${esc(q.client.event||"Event")}${q.client.eventDate ? " · "+esc(eventDates(q.client)) : ""} · ${money(t.total)}</div></div>
       <div class="a" data-id="${q.id}"><button class="btn sm primary" data-act="open" type="button">Open</button><button class="btn sm" data-act="dup" type="button">Copy</button><button class="btn sm ghost danger" data-act="del" type="button">Delete</button></div>
     </div>`; }).join("") : `<div class="empty">No saved quotes yet. Fill in a quote and press Save.</div>`;
   openModal(`<h3>Saved quotes <button class="btn sm ghost" id="mClose" type="button">Close</button></h3>
@@ -238,7 +326,7 @@ function showSaved(){
   $("modalBody").querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
     const id = b.parentElement.dataset.id, act = b.dataset.act, all = savedQuotes(), q = all.find(x => x.id === id); if(!q) return;
     if(act === "open"){ Q = migrateQuote(JSON.parse(JSON.stringify(q))); LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Opened ${Q.no}`); }
-    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
+    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
     if(act === "del"){
       const wrap = b.parentElement; wrap.innerHTML = `<span class="confirm">Delete ${esc(q.no)}? <button class="btn sm danger" type="button" data-yes>Delete</button><button class="btn sm ghost" type="button" data-no>Keep</button></span>`;
       wrap.querySelector("[data-yes]").onclick = () => { LS.set("gw_quotes", all.filter(x => x.id !== id)); renderCount(); showSaved(); toast(`Deleted ${q.no}`); };
@@ -369,7 +457,7 @@ function summaryText(){
   const t = totals(Q), c = Q.client;
   const lines = [`*${BIZ.name} EVENT SOLUTIONS*`, `Quotation ${Q.no}`, `Date: ${dmy(Q.date)} · Valid until: ${dmy(Q.valid)}`, ""];
   if(c.name) lines.push(`Client: ${c.name}`);
-  if(c.event) lines.push(`Event: ${c.event}${c.eventDate ? " – "+longDate(c.eventDate) : ""}`);
+  if(c.event) lines.push(`Event: ${c.event}${c.eventDate ? " – "+eventDates(c) : ""}`);
   if(c.venue) lines.push(`Venue: ${c.venue}`);
   if(c.guests) lines.push(`Guests: ${c.guests}`);
   lines.push("", "*Items*");
@@ -377,7 +465,7 @@ function summaryText(){
   lines.push("", `Subtotal: ${money(t.sub)}`, `Setup: ${money(t.setup)}`, `Delivery: ${money(t.del)}`);
   if(t.disc) lines.push(`Discount: −${money(t.disc)}`);
   lines.push(`*ESTIMATED TOTAL: ${money(t.total)}*`);
-  if(t.dep) lines.push(`Refundable deposit (paid separately): ${money(t.dep)}`);
+  if(t.dep) lines.push(`Refundable deposit (paid separately${Q.depositAuto ? ", 15% of total" : ""}): ${money(t.dep)}`);
   if((Q.scope||"").trim()) lines.push("", Q.scope.trim());
   lines.push("", "Full payment is required before delivery. Full conditions are on the PDF quote.", "", BIZ.phones.replace(/\s+\|\s+/, " / "), BIZ.tagline);
   return lines.join("\n");

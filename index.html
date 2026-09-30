@@ -37,7 +37,7 @@
     <div class="card">
       <h2>Quote <small id="statusChipWrap"></small></h2>
       <div class="grid">
-        <div class="f"><label for="qNo">Quote no.</label><input id="qNo"></div>
+        <div class="f"><label for="qNo">Quote no.</label><input id="qNo"><span class="field-help" id="qNoHelp"></span></div>
         <div class="f"><label for="qDate">Date</label><input id="qDate" type="date"></div>
         <div class="f"><label for="qValid">Valid until</label><input id="qValid" type="date"></div>
         <div class="f"><label for="qStatus">Status</label>
@@ -60,7 +60,8 @@
         <div class="f"><label for="cEmail">Email</label><input id="cEmail" type="email" autocomplete="off"></div>
         <div class="f"><label for="cEvent">Event type</label><input id="cEvent" list="eventTypes" placeholder="Wedding, funeral, birthday…">
           <datalist id="eventTypes"><option value="Wedding"><option value="Traditional marriage (engagement)"><option value="Funeral"><option value="Birthday party"><option value="Naming ceremony (outdooring)"><option value="Corporate event"><option value="Church programme"><option value="Graduation party"></datalist></div>
-        <div class="f"><label for="cDate">Event date</label><input id="cDate" type="date"></div>
+        <div class="f"><label for="cDate">Event date (from)</label><input id="cDate" type="date"></div>
+        <div class="f"><label for="cDateEnd">To <span style="font-weight:400">(leave empty for one day)</span></label><input id="cDateEnd" type="date"></div>
         <div class="f"><label for="cGuests">Guests</label><input id="cGuests" type="number" min="0" inputmode="numeric"></div>
         <div class="f wide"><label for="cVenue">Venue / location</label><input id="cVenue" placeholder="e.g. Trinity Hall, Dome"></div>
       </div>
@@ -73,7 +74,6 @@
         <button class="btn sm" id="addRow" type="button">+ Add line</button>
       </div>
       <div class="quick" id="quick"></div>
-      <datalist id="catList"></datalist>
       <div class="totals-mini"><span>Subtotal <b id="miniSub">GHC 0.00</b></span><span>Total <b id="miniTot">GHC 0.00</b></span></div>
     </div>
 
@@ -83,9 +83,10 @@
         <div class="f"><label for="chSetup">Setup (GHC)</label><input id="chSetup" type="number" min="0" step="0.01" inputmode="decimal"></div>
         <div class="f"><label for="chDelivery">Delivery (GHC)</label><input id="chDelivery" type="number" min="0" step="0.01" inputmode="decimal"></div>
         <div class="f"><label for="chDiscount">Discount (GHC)</label><input id="chDiscount" type="number" min="0" step="0.01" inputmode="decimal"></div>
-        <div class="f"><label for="chDeposit">Refundable deposit (GHC)</label><input id="chDeposit" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="f"><label for="chDeposit">Refundable deposit (GHC)</label><input id="chDeposit" type="number" min="0" step="0.01" inputmode="decimal">
+          <label class="check small"><input type="checkbox" id="chDepositAuto"> Work it out for me (15% of the total)</label></div>
       </div>
-      <p class="note">Discount and deposit only appear on the quote when you enter them. The deposit is not added to the total.</p>
+      <p class="note">The discount only appears on the quote when you enter one. The deposit is paid separately and is not added to the total.</p>
     </div>
 
     <div class="card">
@@ -117,6 +118,7 @@
 </main>
 
 <div class="overlay" id="modal" hidden><div class="modal" id="modalBody" role="dialog" aria-modal="true"></div></div>
+<div class="pick" id="pick" role="listbox" hidden></div>
 <input type="file" id="fileSigned" accept="application/pdf,.pdf" hidden>
 <input type="file" id="fileBackup" accept="application/json,.json" hidden>
 

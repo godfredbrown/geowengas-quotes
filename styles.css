@@ -88,6 +88,20 @@ input[type=number]{font-variant-numeric:tabular-nums;text-align:right}
 .count-box b{font-family:var(--serif);font-size:20px;color:var(--plum);font-variant-numeric:tabular-nums;line-height:1.1}
 .count-box span{font-size:13px;color:var(--muted)}
 .count-row .btn{margin-left:auto;align-self:center}
+.field-help{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;min-height:0}
+.field-help:empty{display:none}
+.field-help.warn{color:var(--danger);font-weight:600}
+.linkbtn{border:0;background:none;padding:2px 0;color:var(--plum);font-weight:700;text-decoration:underline;cursor:pointer;font-size:13px}
+.check.small{font-size:14px;color:var(--muted);margin-top:4px}
+.check.small input{width:20px;height:20px}
+input[readonly]{background:var(--surface-2);color:var(--muted)}
+.pick{position:absolute;z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(20,8,30,.22);max-height:300px;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:2px}
+.pick .ph{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:6px 10px 4px}
+.pick button{display:flex;justify-content:space-between;gap:12px;align-items:center;text-align:left;border:0;background:transparent;border-radius:8px;padding:11px 10px;cursor:pointer;font-size:16px;color:var(--fg)}
+.pick button span:last-child{color:var(--muted);font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pick button:hover,.pick button[aria-selected="true"]{background:var(--gold-soft)}
+.pick mark{background:none;color:var(--plum);font-weight:700}
+.pick .none{padding:10px;color:var(--muted);font-size:14px}
 .num-preview{font-family:var(--serif);font-size:22px;color:var(--plum);font-weight:700}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px}
 .check input{width:22px;height:22px;min-height:0;flex:none;margin-top:1px}

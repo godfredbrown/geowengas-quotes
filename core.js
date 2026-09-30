@@ -15,8 +15,10 @@ const STD_CONDS = [
   "Cancellation less than 4 weeks will attract 50%, and less than 4 days will attract 100%.",
   "The hirer will be responsible for freight charges involved in the delivery or return of hired items.",
   "A refundable deposit must be paid for loss or damage, where applicable.",
-  "Hired items must be returned on the agreed return date. Late returns may attract additional charges."
+  "Hired items must be returned on the agreed return date. Late returns may attract additional charges.",
+  "If an item is beyond repair, the customer shall pay its full market value. If the refundable deposit does not cover the repair cost, the customer shall pay the balance."
 ];
+const DEPOSIT_RATE = 0.15;
 
 /* ---------- small helpers ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -32,11 +34,23 @@ const isFilled = i => i.desc || num(i.qty) || num(i.price);
 function totals(q){
   const sub = (q.items||[]).reduce((s,i) => s + num(i.qty)*num(i.price), 0);
   const setup = num(q.setup), del = num(q.delivery), disc = num(q.discount);
-  return {sub, setup, del, disc, total: Math.max(0, sub + setup + del - disc), dep: num(q.deposit)};
+  const total = Math.max(0, sub + setup + del - disc);
+  const dep = q.depositAuto ? Math.round(total * DEPOSIT_RATE * 100) / 100 : num(q.deposit);
+  return {sub, setup, del, disc, total, dep};
+}
+/* Event date, or a range like "Sat 14 Nov – Mon 16 Nov 2026". */
+function eventDates(c){
+  c = c || {};
+  const a = c.eventDate, b = c.eventEnd;
+  if(!a) return b ? longDate(b) : "";
+  if(!b || b === a) return longDate(a);
+  const da = new Date(a+"T00:00:00"), db = new Date(b+"T00:00:00");
+  const f = (d, withYear) => d.toLocaleDateString("en-GB", withYear ? {weekday:"short",day:"numeric",month:"short",year:"numeric"} : {weekday:"short",day:"numeric",month:"short"});
+  return `${f(da, da.getFullYear() !== db.getFullYear())} – ${f(db, true)}`;
 }
 function clientRows(c){
   c = c || {};
-  return [["Client",c.name],["Phone",c.phone],["Event",c.event],["Event date",longDate(c.eventDate)],["Venue",c.venue],["Guests",c.guests],["Email",c.email]].filter(x => x[1]);
+  return [["Client",c.name],["Phone",c.phone],["Event",c.event],[c.eventEnd && c.eventEnd !== c.eventDate ? "Event dates" : "Event date", eventDates(c)],["Venue",c.venue],["Guests",c.guests],["Email",c.email]].filter(x => x[1]);
 }
 
 /* ---------- check code: flags edits to prices, quantities or totals ---------- */
@@ -61,7 +75,7 @@ async function pipe(bytes, stream){ const res = new Response(new Blob([bytes]).s
 function linkPayload(q){
   return {id:q.id, no:q.no, date:q.date, valid:q.valid, client:q.client,
     items:(q.items||[]).filter(isFilled).map(i => ({desc:i.desc, qty:i.qty, price:i.price})),
-    setup:q.setup, delivery:q.delivery, discount:q.discount, deposit:q.deposit, scope:q.scope,
+    setup:q.setup, delivery:q.delivery, discount:q.discount, deposit:totals(q).dep ? totals(q).dep.toFixed(2) : "", depositAuto:false, scope:q.scope,
     conditions:(q.conditions||[]).filter(x => x.trim()), check:checkCode(q)};
 }
 async function encodeQuote(q){
@@ -302,6 +316,6 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
 }
 
-global.GW = {BIZ, STD_CONDS, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
+global.GW = {BIZ, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
   encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady};
 })(window);

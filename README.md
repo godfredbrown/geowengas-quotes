@@ -46,4 +46,4 @@ If you change the list of files the app needs offline, update `CORE` in `sw.js` 
 
 ## Business details
 
-The business name, phone numbers, email, address and conditions are at the top of `core.js` (`BIZ` and `STD_CONDS`). The price list starts with example rates; change them in the app under **More → Price list**.
+The business name, phone numbers, email, address, conditions and the deposit rate (15%) are at the top of `core.js` (`BIZ`, `STD_CONDS`, `DEPOSIT_RATE`). The price list starts with example rates; change them in the app under **More → Price list**.
