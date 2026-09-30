@@ -60,7 +60,8 @@
   <section class="card done" id="doneCard" hidden>
     <h2>Thank you. Your quote is signed.</h2>
     <p style="margin:0 0 12px">Please send the signed PDF back to GEOWENGAS on WhatsApp (<b>+233 531 099 939</b>). If the share menu didn't open, tap the button below.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <p id="driveStatus" hidden></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn primary" id="sResend" type="button">Send signed PDF</button>
       <button class="btn" id="sDownload" type="button">Download signed PDF</button>
     </div>
@@ -73,7 +74,7 @@
 <script>
 (function(){
 "use strict";
-const {decodeQuote, paperHTML, buildPdf, shareOrDownload, downloadBlob, iso, dmy, money, totals, safeName, toast, logoReady, esc} = window.GW;
+const {decodeQuote, paperHTML, buildPdf, shareOrDownload, downloadBlob, uploadSigned, driveEnabled, signedFileName, iso, dmy, money, totals, safeName, toast, logoReady, esc} = window.GW;
 const $ = id => document.getElementById(id);
 let Q = null, signedBlob = null, signedName = "";
 
@@ -134,11 +135,18 @@ $("sAccept").onclick = async () => {
   const sig = {name, date, img:s.img, ratio:s.ratio, signedAt:Date.now()};
   try{ signedBlob = buildPdf(Q, {signature:sig}).output("blob"); }
   catch(e){ console.error(e); err.textContent = "Couldn't create the signed PDF. Please try again."; err.hidden = false; return; }
-  signedName = `${Q.no}_${safeName(name)||"Client"}_SIGNED.pdf`;
+  signedName = signedFileName(Q.no, name);
   $("paper").innerHTML = paperHTML(Q, {minRows:0, signature:sig});
   $("signCard").hidden = true; $("doneCard").hidden = false;
   $("doneCard").scrollIntoView({behavior:"smooth", block:"start"});
-  send();
+  send();   // open the share sheet first, while the tap still counts
+  if(driveEnabled()){
+    const st = $("driveStatus"); st.hidden = false; st.className = "note"; st.textContent = "Sending a copy to GEOWENGAS…";
+    uploadSigned(signedBlob, signedName, {no:Q.no, name, date, check:Q.check, from:"client"}).then(r => {
+      st.textContent = r.ok ? "✓ A copy has been sent to GEOWENGAS." : "Couldn't send a copy automatically. Please send the PDF on WhatsApp.";
+      st.className = r.ok ? "okbox" : "note";
+    });
+  }
 };
 async function send(){
   const r = await shareOrDownload(signedBlob, signedName, `Signed quotation ${Q.no} from ${$("sName").value.trim()}`);

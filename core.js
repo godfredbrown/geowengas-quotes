@@ -19,6 +19,9 @@ const STD_CONDS = [
   "If an item is beyond repair, the customer shall pay its full market value. If the refundable deposit does not cover the repair cost, the customer shall pay the balance."
 ];
 const DEPOSIT_RATE = 0.15;
+/* Signed quotes are saved to Google Drive through the Apps Script in google-drive/Code.gs.
+   Paste the script's Web app URL (ends in /exec) below. Empty = Drive saving is off. */
+const DRIVE_UPLOAD = {url:"", key:"XxkFTWluQnou906QKKYblu3s"};
 
 /* ---------- small helpers ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -285,6 +288,20 @@ async function readPdfRef(file){
   try{ return JSON.parse(unhex(m[1])); }catch(e){ return null; }
 }
 
+/* ---------- save a signed PDF to Google Drive ---------- */
+const driveEnabled = () => !!DRIVE_UPLOAD.url;
+async function uploadSigned(blob, filename, meta={}){
+  if(!DRIVE_UPLOAD.url) return {ok:false, off:true};
+  try{
+    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); });
+    const body = JSON.stringify({key:DRIVE_UPLOAD.key, filename, pdf:b64, ...meta});
+    const res = await fetch(DRIVE_UPLOAD.url, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body, redirect:"follow"});
+    const out = await res.json().catch(() => ({ok:res.ok}));
+    return out && out.ok ? {ok:true, url:out.url, duplicate:!!out.duplicate} : {ok:false, error:(out && out.error) || "failed"};
+  }catch(e){ return {ok:false, error:String(e)}; }
+}
+const signedFileName = (no, name) => `${no}_${safeName(name)||"Client"}_SIGNED.pdf`;
+
 /* ---------- sharing ---------- */
 async function shareOrDownload(blob, filename, text){
   const file = new File([blob], filename, {type: blob.type || "application/octet-stream"});
@@ -316,5 +333,5 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
 }
 
 global.GW = {BIZ, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
-  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady};
+  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName};
 })(window);

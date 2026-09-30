@@ -507,6 +507,10 @@ $("fileSigned").addEventListener("change", async e => {
   list[i] = q; LS.set("gw_quotes", list);
   Q = JSON.parse(JSON.stringify(q)); LS.set("gw_draft", Q); renderAll();
   toast(ok ? `${q.no} marked Accepted. Signed by ${ref.name}.` : `${q.no} was signed, but the prices don't match. Please check it.`, 5000);
+  if(window.GW.driveEnabled()){
+    const r = await window.GW.uploadSigned(f, window.GW.signedFileName(ref.no, ref.name), {no:ref.no, name:ref.name, date:ref.date, check:ref.check, from:"Mum's app"});
+    setTimeout(() => toast(r.ok ? (r.duplicate ? "Already saved in Google Drive." : "Saved to Google Drive.") : "Couldn't reach Google Drive. It's still recorded here; try again later.", 4000), 5200);
+  }
 });
 
 /* ---------- WhatsApp text ---------- */

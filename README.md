@@ -44,6 +44,10 @@ If you change the list of files the app needs offline, update `CORE` in `sw.js` 
 - **More → Record a signed quote** opens the signed PDF the client sent back. The quote is marked Accepted if the prices match what was sent, or flagged if they don't.
 - **More → Back up everything** saves all quotes, the price list and the quote count to one file. Do this now and then and keep the file somewhere safe (e.g. send it to yourself on WhatsApp). **More → Restore a backup** loads it on a new phone.
 
+## Signed quotes in Google Drive
+
+Signed quotations are saved automatically to the Drive folder **Geowengas Quotations and Invoices** once the one-time setup in [`google-drive/SETUP.md`](google-drive/SETUP.md) is done.
+
 ## Business details
 
 The business name, phone numbers, email, address, conditions and the deposit rate (15% of the items subtotal) are at the top of `core.js` (`BIZ`, `STD_CONDS`, `DEPOSIT_RATE`). The price list starts with example rates; change them in the app under **More → Price list**.
