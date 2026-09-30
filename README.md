@@ -39,6 +39,7 @@ If you change the list of files the app needs offline, update `CORE` in `sw.js` 
 ## Everyday use
 
 - **Save** keeps the quote on the phone. **Send PDF** saves it, marks it Sent and opens the share menu so she can pick WhatsApp.
+- **Send Invoice** turns the quote into an invoice (INV-… number, no signature lines, "Total Due") and shares it like the quote. A copy is saved to Google Drive.
 - **See quote** shows the finished quote exactly as the client will see it.
 - **More → Send for signature** sends the client a link. They review the quote, sign with a finger and send the signed PDF back.
 - **More → Record a signed quote** opens the signed PDF the client sent back. The quote is marked Accepted if the prices match what was sent, or flagged if they don't.
@@ -46,7 +47,7 @@ If you change the list of files the app needs offline, update `CORE` in `sw.js` 
 
 ## Signed quotes in Google Drive
 
-Signed quotations are saved automatically to the Drive folder **Geowengas Quotations and Invoices** once the one-time setup in [`google-drive/SETUP.md`](google-drive/SETUP.md) is done.
+Signed quotations and every invoice sent are saved automatically to the Drive folder **Geowengas Quotations and Invoices** once the one-time setup in [`google-drive/SETUP.md`](google-drive/SETUP.md) is done.
 
 ## Business details
 

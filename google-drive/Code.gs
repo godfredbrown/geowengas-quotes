@@ -1,7 +1,7 @@
 /**
  * GEOWENGAS Quote Builder → Google Drive
  *
- * Saves every signed quotation PDF into the Drive folder
+ * Saves every signed quotation and every invoice PDF into the Drive folder
  * "Geowengas Quotations and Invoices" (created if it doesn't exist).
  *
  * Setup: see google-drive/SETUP.md in the repo.
@@ -35,10 +35,12 @@ function doPost(e) {
         return reply({ ok: true, duplicate: true, url: f.getUrl() });
       }
       const file = folder.createFile(Utilities.newBlob(bytes, "application/pdf", name));
-      file.setDescription(
-        "Quote " + (data.no || "") + " signed by " + (data.name || "") +
-        " on " + (data.date || "") + ". Check code " + (data.check || "") +
-        ". Uploaded from " + (data.from || "app") + "."
+      file.setDescription(data.kind === "invoice"
+        ? "Invoice " + (data.no || "") + " (quote " + (data.quote || "") + ") for " + (data.name || "") +
+          ", dated " + (data.date || "") + ", total GHC " + (data.total || "") + ". Uploaded from " + (data.from || "app") + "."
+        : "Quote " + (data.no || "") + " signed by " + (data.name || "") +
+          " on " + (data.date || "") + ". Check code " + (data.check || "") +
+          ". Uploaded from " + (data.from || "app") + "."
       );
       return reply({ ok: true, url: file.getUrl() });
     } finally {

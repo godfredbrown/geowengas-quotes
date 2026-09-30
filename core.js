@@ -132,6 +132,7 @@ const LOGO_RATIO = 528/600;
 /* ---------- paper (HTML preview) ---------- */
 const boldPct = s => esc(s).replace(/(\d+%)/g,"<b>$1</b>");
 function paperHTML(q, opt={}){
+  const inv = opt.invoice;
   const t = totals(q), cl = clientRows(q.client);
   const filled = (q.items||[]).filter(isFilled);
   let rows = filled.map(i => `<tr><td>${esc(i.desc)}</td><td class="q">${esc(i.qty)}</td><td class="n">${num(i.price)?amt(i.price):""}</td><td class="n">${amt(num(i.qty)*num(i.price))}</td></tr>`).join("");
@@ -144,8 +145,10 @@ function paperHTML(q, opt={}){
       <div class="p-brand"><b>${BIZ.name}</b><span class="sub">${BIZ.sub}</span>
         <div class="ct">${BIZ.phones}<br>${BIZ.email}  |  ${BIZ.addr}<br>${BIZ.social}</div></div>
     </div>
-    <div class="p-title">QUOTATION / ESTIMATE</div>
-    <div class="p-meta"><div>QUOTE NO:&nbsp; ${esc(q.no)}</div><div>DATE:&nbsp; ${dmy(q.date)}</div><div>VALID UNTIL:&nbsp; ${dmy(q.valid)}</div></div>
+    ${inv ? `<div class="p-title">INVOICE</div>
+    <div class="p-meta"><div>INVOICE NO:&nbsp; ${esc(inv.no)}</div><div>DATE:&nbsp; ${dmy(inv.date)}</div><div>QUOTE REF:&nbsp; ${esc(q.no)}</div></div>`
+    : `<div class="p-title">QUOTATION / ESTIMATE</div>
+    <div class="p-meta"><div>QUOTE NO:&nbsp; ${esc(q.no)}</div><div>DATE:&nbsp; ${dmy(q.date)}</div><div>VALID UNTIL:&nbsp; ${dmy(q.valid)}</div></div>`}
     <div class="p-label">CLIENT / EVENT DETAILS</div>
     <div class="p-client">${cl.map(x => `<div><em>${x[0]}:</em>${esc(x[1])}</div>`).join("")}</div>
     <div class="p-tbl-wrap"><table class="p-tbl"><thead><tr><th>DESCRIPTION</th><th>QTY</th><th class="n">UNIT PRICE (GHC)</th><th class="n">AMOUNT (GHC)</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -158,7 +161,7 @@ function paperHTML(q, opt={}){
           <div><span>Transportation (GHC)</span><span>${amt(t.del)}</span></div>
           <div><span>Refundable Deposit (GHC)</span><span>${amt(t.dep)}</span></div>
           ${t.disc ? `<div><span>Discount (GHC)</span><span>− ${amt(t.disc)}</span></div>` : ""}
-          <div class="grand"><span>Estimated Total (GHC)</span><span>${amt(t.total)}</span></div>
+          <div class="grand"><span>${inv ? "Total Due (GHC)" : "Estimated Total (GHC)"}</span><span>${amt(t.total)}</span></div>
         </div>
       </div>
     </div>
@@ -166,11 +169,11 @@ function paperHTML(q, opt={}){
     <div class="p-pay">${PAYMENT.map((m,i) => `<div><b>${i+1}. ${esc(m.title)}</b>${m.accounts.map(a => `<div class="acc"><i>${esc(a.head)}</i>${a.lines.map(l => `<span>${esc(l[0])}: <strong>${esc(l[1])}</strong></span>`).join("")}</div>`).join("")}</div>`).join("")}</div>
     <div class="p-conds-h">Conditions</div>
     <ol class="p-conds">${(q.conditions||[]).filter(x => x.trim()).map((x,i) => `<li>${i+1}. ${boldPct(x)}</li>`).join("")}</ol>
-    <div class="p-sign">
+    ${inv ? "" : `<div class="p-sign">
       <div>Client Signature:<span class="ln">${sig && sig.img ? `<img src="${sig.img}" alt="Client signature">` : ""}</span></div>
       <div>Date:<span class="ln d">${sig ? esc(dmy(sig.date)) : ""}</span></div>
     </div>
-    ${sig ? `<div class="p-signed">Signed by ${esc(sig.name)} · check code ${esc(q.check || checkCode(q))}</div>` : ""}
+    ${sig ? `<div class="p-signed">Signed by ${esc(sig.name)} · check code ${esc(q.check || checkCode(q))}</div>` : ""}`}
     <div class="p-foot">${BIZ.tagline}</div>`;
 }
 
@@ -188,8 +191,9 @@ function buildPdf(q, opt={}){
   const A = (style,size,color) => { doc.setFont("helvetica",style); doc.setFontSize(size); doc.setTextColor(...(color||INK)); };
   const footer = () => { A("bold",8,PURPLE); doc.setCharSpace(0.3); doc.text(BIZ.tagline, W/2, 287, {align:"center"}); doc.setCharSpace(0); };
 
-  doc.setProperties({title:`${q.no} ${BIZ.name} Quotation`, author:BIZ.name, subject:"Quotation / Estimate",
-    keywords:"GWQ:" + hex(JSON.stringify({no:q.no, id:q.id, check:q.check || checkCode(q), signed:!!sig, name:sig?sig.name:"", date:sig?sig.date:""}))});
+  const inv = opt.invoice;
+  doc.setProperties({title: inv ? `${inv.no} ${BIZ.name} Invoice` : `${q.no} ${BIZ.name} Quotation`, author:BIZ.name, subject: inv ? "Invoice" : "Quotation / Estimate",
+    keywords:"GWQ:" + hex(JSON.stringify({kind: inv ? "invoice" : "quote", invoice: inv ? inv.no : "", no:q.no, id:q.id, check:q.check || checkCode(q), signed:!!sig, name:sig?sig.name:"", date:sig?sig.date:""}))});
 
   // Header
   let y = 10;
@@ -202,14 +206,14 @@ function buildPdf(q, opt={}){
   doc.text(`${BIZ.email}  |  ${BIZ.addr}`, W-M, y+22, {align:"right"});
   doc.text(BIZ.social, W-M, y+25.5, {align:"right"});
   y += lh + 9;
-  S("bold",21,PURPLE); doc.text("QUOTATION / ESTIMATE", M, y); y += 6;
+  S("bold",21,PURPLE); doc.text(inv ? "INVOICE" : "QUOTATION / ESTIMATE", M, y); y += 6;
 
   // Meta
   const cw = (W-2*M)/3;
   doc.setFillColor(...FILL); doc.setDrawColor(...GOLD); doc.setLineWidth(0.35);
   doc.rect(M,y,W-2*M,9,"FD"); doc.line(M+cw,y,M+cw,y+9); doc.line(M+2*cw,y,M+2*cw,y+9);
   S("normal",9);
-  [["QUOTE NO:  ",q.no],["DATE:  ",dmy(q.date)],["VALID UNTIL:  ",dmy(q.valid)]].forEach((m,i) => doc.text(m[0]+(m[1]||""), M+i*cw+2.5, y+5.8));
+  (inv ? [["INVOICE NO:  ",inv.no],["DATE:  ",dmy(inv.date)],["QUOTE REF:  ",q.no]] : [["QUOTE NO:  ",q.no],["DATE:  ",dmy(q.date)],["VALID UNTIL:  ",dmy(q.valid)]]).forEach((m,i) => doc.text(m[0]+(m[1]||""), M+i*cw+2.5, y+5.8));
   y += 15;
 
   // Client
@@ -256,7 +260,7 @@ function buildPdf(q, opt={}){
     if(i){ doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.line(bx, by+i*RH, bx+bw, by+i*RH); } });
   const gy = by + rowsT.length*RH;
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.35); doc.line(bx, gy, bx+bw, gy);
-  S("bold",10,PURPLE); doc.text("Estimated Total (GHC)", bx+3, gy+4.5); doc.text(amt(t.total), bx+bw-3, gy+4.5, {align:"right"});
+  S("bold",10,PURPLE); doc.text(inv ? "Total Due (GHC)" : "Estimated Total (GHC)", bx+3, gy+4.5); doc.text(amt(t.total), bx+bw-3, gy+4.5, {align:"right"});
   doc.rect(bx, by, bw, (rowsT.length+1)*RH);
   y += blockH + 5;
 
@@ -293,6 +297,7 @@ function buildPdf(q, opt={}){
     if(y + h > LIMIT){ doc.addPage(); footer(); y = 18; }
     S("normal",8.6); doc.text(l, M, y); y += h;
   });
+  if(inv) return doc;   // invoices have no signature lines
   y += sig ? 13 : 8;
   if(y + (sig ? 9 : 2) > 283){ doc.addPage(); footer(); y = sig ? 30 : 22; }
 
@@ -345,6 +350,7 @@ async function checkDrive(){
   catch(e){ return {ok:false, error:String(e)}; }
 }
 const signedFileName = (no, name) => `${no}_${safeName(name)||"Client"}_SIGNED.pdf`;
+const invoiceFileName = (no, name, suffix="") => `${no}_${safeName(name)||"Client"}_INVOICE${suffix}.pdf`;
 
 /* ---------- sharing ---------- */
 async function shareOrDownload(blob, filename, text){
@@ -377,5 +383,5 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
 }
 
 global.GW = {BIZ, PAYMENT, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
-  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, checkDrive};
+  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, invoiceFileName, checkDrive};
 })(window);

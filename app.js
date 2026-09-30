@@ -306,6 +306,11 @@ function renderPaper(){
       ? `Signed by ${Q.signed.name} on ${dmy(Q.signed.date)}. Prices match what you sent.`
       : `Signed by ${Q.signed.name} on ${dmy(Q.signed.date)}, but the prices or totals in their copy don't match what you sent. Check their PDF before accepting.`;
   } else si.hidden = true;
+  const ii = $("invoiceInfo");
+  if(Q.invoice && Q.invoice.sentAt){
+    ii.hidden = false;
+    ii.textContent = `Invoice ${Q.invoice.no} sent on ${new Date(Q.invoice.sentAt).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}` + (Q.invoice.drive === true ? " · saved to Google Drive" : Q.invoice.drive === false ? " · not yet in Google Drive (send it again to retry)" : "");
+  } else ii.hidden = true;
 }
 function renderCount(){
   const cfg = numCfg(), n = issuedCount(cfg);
@@ -353,7 +358,8 @@ $("btnMore").onclick = () => {
     ["sign","Send for signature","Client signs on their phone and sends it back"],
     ["signed","Record a signed quote","Open the PDF the client sent back"],
     ["copy","Copy text for WhatsApp","A short summary to paste in a chat"],
-    ["download","Download PDF","Save the PDF on this phone"],
+    ["download","Download quote PDF","Save the quote PDF on this phone"],
+    ["invoice","Send invoice","The quote as an invoice, without signature lines"],
     ["catalog","Price list","Your usual items and rates"],
     ["numbering","Quote numbering","Prefix and where the count continues"],
     ["drive","Check Google Drive link","Signed quotes are saved to Drive"],
@@ -366,7 +372,7 @@ $("btnMore").onclick = () => {
   $("modalBody").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
     const m = b.dataset.m; closeModal();
     ({new:askNew, saved:showSaved, sign:sendForSignature, signed:() => $("fileSigned").click(), copy:copySummary,
-      download:() => makePdf("download"), catalog:showCatalog, numbering:showNumbering, drive:checkDriveLink, backup:backup, restore:() => $("fileBackup").click()})[m]();
+      download:() => makePdf("download"), invoice:openInvoice, catalog:showCatalog, numbering:showNumbering, drive:checkDriveLink, backup:backup, restore:() => $("fileBackup").click()})[m]();
   });
 };
 
@@ -384,7 +390,7 @@ function showSaved(){
   $("modalBody").querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
     const id = b.parentElement.dataset.id, act = b.dataset.act, all = savedQuotes(), q = all.find(x => x.id === id); if(!q) return;
     if(act === "open"){ Q = upgradeConds(migrateQuote(JSON.parse(JSON.stringify(q)))); LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Opened ${Q.no}`); }
-    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
+    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; delete n.invoice; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
     if(act === "del"){
       const wrap = b.parentElement; wrap.innerHTML = `<span class="confirm">Delete ${esc(q.no)}? <button class="btn sm danger" type="button" data-yes>Delete</button><button class="btn sm ghost" type="button" data-no>Keep</button></span>`;
       wrap.querySelector("[data-yes]").onclick = () => { LS.set("gw_quotes", all.filter(x => x.id !== id)); renderCount(); showSaved(); toast(`Deleted ${q.no}`); };
@@ -456,6 +462,72 @@ async function makePdf(mode){
 $("btnSend").onclick = () => makePdf("send");
 $("btnSend2").onclick = () => makePdf("send");
 
+/* ---------- invoices: the quote without signature lines, numbered INV-… ---------- */
+function invoiceNoFor(q){
+  if(q.invoice && q.invoice.no) return q.invoice.no;
+  const n = String(q.no||"").replace(/^[A-Za-z]+(?=-)/, "INV");
+  return n === q.no ? "INV-" + q.no : n;
+}
+function invoiceFor(q){ return {no: invoiceNoFor(q), date: (q.invoice && q.invoice.date) || iso(new Date())}; }
+$("btnInvoice").onclick = openInvoice;
+$("btnInvoice2").onclick = openInvoice;
+function openInvoice(){
+  if(!Q.items.some(isFilled)){ toast("Add at least one item first."); return; }
+  if(Q.example){ toast("This is the example quote. Start a new quote for a real client."); return; }
+  const inv = invoiceFor(Q), t = totals(Q);
+  const again = Q.invoice && Q.invoice.sentAt;
+  openModal(`<h3>Send invoice <button class="btn sm ghost" id="mClose" type="button">Cancel</button></h3>
+    <div class="inv-sum">
+      <span>Invoice no.</span><b>${esc(inv.no)}</b>
+      <span>For quote</span><b>${esc(Q.no)}</b>
+      <span>Client</span><b>${esc(Q.client.name || "No client name")}</b>
+      <span>Total</span><b>${money(t.total)}</b>
+    </div>
+    ${again ? `<p class="hint">This invoice was already sent on ${esc(new Date(Q.invoice.sentAt).toLocaleDateString("en-GB"))}. Sending again uses the same invoice number.</p>` : ""}
+    <p class="hint">The invoice is the quote without the signature lines. A copy is saved to Google Drive.</p>
+    <div class="confirm">
+      <button class="btn primary" id="invSend" type="button">Send invoice</button>
+      <button class="btn" id="invDownload" type="button">Download</button>
+      <button class="btn ghost" id="invPrev" type="button">See invoice</button>
+    </div>
+    <div class="inv-paper" id="invPaper" hidden><div class="paper">${paperHTML(Q, {invoice:inv, minRows:0})}</div></div>`);
+  $("mClose").onclick = closeModal;
+  $("invPrev").onclick = () => { const p = $("invPaper"); p.hidden = !p.hidden; $("invPrev").textContent = p.hidden ? "See invoice" : "Hide invoice"; };
+  $("invSend").onclick = () => sendInvoice("send");
+  $("invDownload").onclick = () => sendInvoice("download");
+}
+async function sendInvoice(mode){
+  if(!window.jspdf || !window.jspdf.jsPDF){ toast("The PDF tool didn't load. Close the app and open it again."); return; }
+  await logoReady;
+  const inv = invoiceFor(Q);
+  let doc;
+  try{ doc = buildPdf(Q, {invoice:inv}); }
+  catch(e){ console.error(e); toast("Couldn't make the invoice. Check the quote for unusual characters."); return; }
+  const blob = doc.output("blob");
+  const check = checkCode(Q);
+  const changed_ = Q.invoice && Q.invoice.check && Q.invoice.check !== check;
+  const stamp = new Date(); const suffix = changed_ ? `_updated-${iso(stamp).replace(/-/g,"")}-${String(stamp.getHours()).padStart(2,"0")}${String(stamp.getMinutes()).padStart(2,"0")}` : "";
+  const name = window.GW.invoiceFileName(inv.no, Q.client.name, suffix);
+  Q.invoice = {...(Q.invoice||{}), no:inv.no, date:inv.date, sentAt:Date.now(), check};
+  saveQuote(true); renderPaper();
+  closeModal();
+  if(mode === "download"){ window.GW.downloadBlob(blob, name); toast(`Downloaded ${name}`); }
+  else {
+    const first = (Q.client.name||"").trim();
+    const r = await shareOrDownload(blob, name, `Hello${first ? " "+first : ""}, please find your invoice ${inv.no} from GEOWENGAS Event Solutions (total ${money(totals(Q).total)}). Payment details are on the invoice.`);
+    if(r === "downloaded") toast(`Downloaded ${name}. Attach it in WhatsApp.`, 4500);
+  }
+  // copy to Google Drive
+  if(window.GW.driveEnabled()){
+    const id = Q.id;
+    const up = await window.GW.uploadSigned(blob, name, {kind:"invoice", no:inv.no, quote:Q.no, name:Q.client.name||"", date:inv.date, total:totals(Q).total.toFixed(2), check, from:"Mum's app"});
+    const list = savedQuotes(), i = list.findIndex(x => x.id === id);
+    if(i >= 0){ list[i].invoice = {...(list[i].invoice||{}), drive: up.ok}; LS.set("gw_quotes", list); }
+    if(Q.id === id){ Q.invoice.drive = up.ok; LS.set("gw_draft", Q); renderPaper(); }
+    setTimeout(() => toast(up.ok ? `Invoice ${inv.no} saved to Google Drive.` : "Couldn't reach Google Drive. Send the invoice again later to save it there.", 4000), mode === "download" ? 1200 : 2500);
+  }
+}
+
 /* ---------- send for signature ---------- */
 $("btnSign2").onclick = sendForSignature;
 async function sendForSignature(){
@@ -497,6 +569,7 @@ $("fileSigned").addEventListener("change", async e => {
   const f = e.target.files[0]; e.target.value = ""; if(!f) return;
   const ref = await readPdfRef(f);
   if(!ref){ toast("That PDF wasn't made by this app, so it can't be matched to a quote.", 4500); return; }
+  if(ref.kind === "invoice"){ toast(`That's invoice ${ref.invoice}, not a signed quote.`, 4500); return; }
   if(!ref.signed){ toast(`That's the unsigned copy of ${ref.no}. Ask the client to sign it using the link.`, 4500); return; }
   const list = savedQuotes();
   const i = list.findIndex(x => x.id === ref.id) >= 0 ? list.findIndex(x => x.id === ref.id) : list.findIndex(x => x.no === ref.no);

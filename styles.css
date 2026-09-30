@@ -115,6 +115,10 @@ input[readonly]{background:var(--surface-2);color:var(--muted)}
 .cal-grid button.mid{background:var(--gold-soft);border-radius:0}
 .cal-grid button.start,.cal-grid button.end{background:var(--accent);color:var(--accent-fg);font-weight:700}
 .cal-sel{margin:10px 0 0;font-weight:600;color:var(--plum)}
+.inv-paper{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.inv-paper .paper{box-shadow:none;padding:16px}
+.inv-sum{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:15px}
+.inv-sum span{color:var(--muted)}
 .num-preview{font-family:var(--serif);font-size:22px;color:var(--plum);font-weight:700}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px}
 .check input{width:22px;height:22px;min-height:0;flex:none;margin-top:1px}
@@ -214,8 +218,8 @@ input[readonly]{background:var(--surface-2);color:var(--muted)}
   .brand b{font-size:17px}
   .brand img{width:40px}
   .bar-in{gap:8px}
-  .actions{width:100%}
-  .actions .btn{flex:1}
+  .actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .actions .btn{width:100%}
   .item-h{display:none}
   .item{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 40px;grid-template-areas:"desc desc desc x" "qty price amt amt";padding-bottom:12px;border-bottom:1px solid var(--line)}
   .item .i-desc{grid-area:desc}.item .i-qty{grid-area:qty}.item .i-price{grid-area:price}.item .amt{grid-area:amt}.item .x{grid-area:x}

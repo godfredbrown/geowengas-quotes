@@ -18,10 +18,11 @@
 
 <header class="bar">
   <div class="bar-in">
-    <div class="brand"><img src="logo.jpg" alt="GEOWENGAS Event Solutions logo"><div><b>GEOWENGAS</b><span>QUOTE BUILDER</span></div></div>
+    <div class="brand"><img src="logo.jpg" alt="GEOWENGAS Event Solutions logo"><div><b>GEOWENGAS</b><span>QUOTES &amp; INVOICES</span></div></div>
     <div class="actions">
       <button class="btn" id="btnSave" type="button">Save</button>
-      <button class="btn primary" id="btnSend" type="button">Send PDF</button>
+      <button class="btn primary" id="btnSend" type="button">Send Quote</button>
+      <button class="btn gold" id="btnInvoice" type="button">Send Invoice</button>
       <button class="btn" id="btnMore" type="button" aria-haspopup="dialog">More ▾</button>
     </div>
   </div>
@@ -45,6 +46,7 @@
         </div>
       </div>
       <div id="signedInfo" hidden style="margin-top:12px"></div>
+      <div id="invoiceInfo" class="note" hidden></div>
       <div class="count-row">
         <div class="count-box"><b id="cntIssued">0</b><span id="cntLabel">quotes issued</span></div>
         <div class="count-box"><b id="cntNext">QT-2026-001</b><span>next quote number</span></div>
@@ -110,7 +112,8 @@
     <div class="pv-head">Live preview <span id="pvStatus"></span></div>
     <div class="paper-scroll"><div class="paper" id="paper"></div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-      <button class="btn primary" id="btnSend2" type="button" style="flex:1">Send PDF</button>
+      <button class="btn primary" id="btnSend2" type="button" style="flex:1">Send Quote</button>
+      <button class="btn" id="btnInvoice2" type="button" style="flex:1">Send Invoice</button>
       <button class="btn gold" id="btnSign2" type="button" style="flex:1">Send for signature</button>
     </div>
   </aside>
