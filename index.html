@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GEOWENGAS Quote Builder</title>
+<meta name="description" content="Make GEOWENGAS Event Solutions quotations and send them as PDFs.">
+<meta name="theme-color" content="#5b1e6d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GW Quotes">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-view="edit">
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand"><img src="logo.jpg" alt="GEOWENGAS Event Solutions logo"><div><b>GEOWENGAS</b><span>QUOTE BUILDER</span></div></div>
+    <div class="actions">
+      <button class="btn" id="btnSave" type="button">Save</button>
+      <button class="btn primary" id="btnSend" type="button">Send PDF</button>
+      <button class="btn" id="btnMore" type="button" aria-haspopup="dialog">More ▾</button>
+    </div>
+  </div>
+</header>
+
+<div class="tabs" role="tablist">
+  <button type="button" role="tab" id="tabEdit" aria-selected="true">Edit quote</button>
+  <button type="button" role="tab" id="tabPrev" aria-selected="false">See quote</button>
+</div>
+
+<main class="wrap">
+  <section class="editor">
+    <div class="card">
+      <h2>Quote <small id="statusChipWrap"></small></h2>
+      <div class="grid">
+        <div class="f"><label for="qNo">Quote no.</label><input id="qNo"></div>
+        <div class="f"><label for="qDate">Date</label><input id="qDate" type="date"></div>
+        <div class="f"><label for="qValid">Valid until</label><input id="qValid" type="date"></div>
+        <div class="f"><label for="qStatus">Status</label>
+          <select id="qStatus"><option value="draft">Draft</option><option value="sent">Sent</option><option value="accepted">Accepted</option><option value="declined">Declined</option></select>
+        </div>
+      </div>
+      <div id="signedInfo" hidden style="margin-top:12px"></div>
+      <div class="count-row">
+        <div class="count-box"><b id="cntIssued">0</b><span id="cntLabel">quotes issued</span></div>
+        <div class="count-box"><b id="cntNext">QT-2026-001</b><span>next quote number</span></div>
+        <button class="btn sm" id="btnNumbering" type="button">Numbering settings</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Client / event details</h2>
+      <div class="grid">
+        <div class="f"><label for="cName">Client name</label><input id="cName" autocomplete="off" placeholder="e.g. Mrs. Abena Mensah"></div>
+        <div class="f"><label for="cPhone">Phone (WhatsApp)</label><input id="cPhone" inputmode="tel" autocomplete="off" placeholder="024 000 0000"></div>
+        <div class="f"><label for="cEmail">Email</label><input id="cEmail" type="email" autocomplete="off"></div>
+        <div class="f"><label for="cEvent">Event type</label><input id="cEvent" list="eventTypes" placeholder="Wedding, funeral, birthday…">
+          <datalist id="eventTypes"><option value="Wedding"><option value="Traditional marriage (engagement)"><option value="Funeral"><option value="Birthday party"><option value="Naming ceremony (outdooring)"><option value="Corporate event"><option value="Church programme"><option value="Graduation party"></datalist></div>
+        <div class="f"><label for="cDate">Event date</label><input id="cDate" type="date"></div>
+        <div class="f"><label for="cGuests">Guests</label><input id="cGuests" type="number" min="0" inputmode="numeric"></div>
+        <div class="f wide"><label for="cVenue">Venue / location</label><input id="cVenue" placeholder="e.g. Trinity Hall, Dome"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Items <small>Type a description or tap an item below</small></h2>
+      <div class="items" id="items"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm" id="addRow" type="button">+ Add line</button>
+      </div>
+      <div class="quick" id="quick"></div>
+      <datalist id="catList"></datalist>
+      <div class="totals-mini"><span>Subtotal <b id="miniSub">GHC 0.00</b></span><span>Total <b id="miniTot">GHC 0.00</b></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Charges</h2>
+      <div class="grid">
+        <div class="f"><label for="chSetup">Setup (GHC)</label><input id="chSetup" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="f"><label for="chDelivery">Delivery (GHC)</label><input id="chDelivery" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="f"><label for="chDiscount">Discount (GHC)</label><input id="chDiscount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="f"><label for="chDeposit">Refundable deposit (GHC)</label><input id="chDeposit" type="number" min="0" step="0.01" inputmode="decimal"></div>
+      </div>
+      <p class="note">Discount and deposit only appear on the quote when you enter them. The deposit is not added to the total.</p>
+    </div>
+
+    <div class="card">
+      <h2>Scope / inclusions / exclusions</h2>
+      <label for="scope" class="sr">Scope, inclusions and exclusions</label>
+      <textarea id="scope" rows="4" placeholder="What's included, what's not, setup times…"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Conditions <small>Changes apply to this quote only</small></h2>
+      <div class="conds" id="conds"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn sm" id="addCond" type="button">+ Add condition</button>
+        <button class="btn sm ghost" id="resetCond" type="button">Restore standard conditions</button>
+      </div>
+    </div>
+
+    <button class="btn primary block" id="btnSeeQuote" type="button">See the finished quote</button>
+  </section>
+
+  <aside class="preview" aria-label="Quote preview">
+    <div class="pv-head">Live preview <span id="pvStatus"></span></div>
+    <div class="paper-scroll"><div class="paper" id="paper"></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn primary" id="btnSend2" type="button" style="flex:1">Send PDF</button>
+      <button class="btn gold" id="btnSign2" type="button" style="flex:1">Send for signature</button>
+    </div>
+  </aside>
+</main>
+
+<div class="overlay" id="modal" hidden><div class="modal" id="modalBody" role="dialog" aria-modal="true"></div></div>
+<input type="file" id="fileSigned" accept="application/pdf,.pdf" hidden>
+<input type="file" id="fileBackup" accept="application/json,.json" hidden>
+
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
