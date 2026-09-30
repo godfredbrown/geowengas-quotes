@@ -34,9 +34,9 @@ const isFilled = i => i.desc || num(i.qty) || num(i.price);
 function totals(q){
   const sub = (q.items||[]).reduce((s,i) => s + num(i.qty)*num(i.price), 0);
   const setup = num(q.setup), del = num(q.delivery), disc = num(q.discount);
-  const total = Math.max(0, sub + setup + del - disc);
-  const dep = q.depositAuto ? Math.round(total * DEPOSIT_RATE * 100) / 100 : num(q.deposit);
-  return {sub, setup, del, disc, total, dep};
+  const base = Math.max(0, sub + setup + del - disc);
+  const dep = q.depositAuto ? Math.round(base * DEPOSIT_RATE * 100) / 100 : num(q.deposit);
+  return {sub, setup, del, disc, base, dep, total: base + dep};
 }
 /* Event date, or a range like "Sat 14 Nov – Mon 16 Nov 2026". */
 function eventDates(c){
@@ -142,10 +142,10 @@ function paperHTML(q, opt={}){
           <div><span>Subtotal (GHC)</span><span>${amt(t.sub)}</span></div>
           <div><span>Setup (GHC)</span><span>${amt(t.setup)}</span></div>
           <div><span>Delivery (GHC)</span><span>${amt(t.del)}</span></div>
+          <div><span>Refundable Deposit (GHC)</span><span>${amt(t.dep)}</span></div>
           ${t.disc ? `<div><span>Discount (GHC)</span><span>− ${amt(t.disc)}</span></div>` : ""}
           <div class="grand"><span>Estimated Total (GHC)</span><span>${amt(t.total)}</span></div>
         </div>
-        ${t.dep ? `<div class="dep">Refundable deposit (GHC), paid separately: ${amt(t.dep)}</div>` : ""}
       </div>
     </div>
     <div class="p-conds-h">Conditions</div>
@@ -226,14 +226,14 @@ function buildPdf(q, opt={}){
   S("normal",8.6);
   const scopeLines = doc.splitTextToSize(q.scope||"", half-8);
   const scopeH = Math.max(14, scopeLines.length*3.8+5);
-  const RH = 6.6, totRows = 4 + (t.disc?1:0);
-  const blockH = Math.max(scopeH+5, totRows*RH+2.5+(t.dep?6:0));
+  const RH = 6.6, totRows = 5 + (t.disc?1:0);
+  const blockH = Math.max(scopeH+5, totRows*RH+2.5);
   if(y+blockH > 272){ doc.addPage(); footer(); y = 18; }
   S("bold",9.5); doc.text("Scope / Inclusions / Exclusions", M, y);
   doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M, y+2.5, half-4, scopeH);
   S("normal",8.6); doc.text(scopeLines, M+2.5, y+7);
   const bx = M+half+4, bw = W-M-bx, by = y+2.5;
-  const rowsT = [["Subtotal (GHC)",amt(t.sub)],["Setup (GHC)",amt(t.setup)],["Delivery (GHC)",amt(t.del)]];
+  const rowsT = [["Subtotal (GHC)",amt(t.sub)],["Setup (GHC)",amt(t.setup)],["Delivery (GHC)",amt(t.del)],["Refundable Deposit (GHC)",amt(t.dep)]];
   if(t.disc) rowsT.push(["Discount (GHC)","- "+amt(t.disc)]);
   doc.setFillColor(...FILL); doc.rect(bx, by+rowsT.length*RH, bw, RH, "F");
   rowsT.forEach((r,i) => { S("normal",9.2); doc.text(r[0], bx+3, by+i*RH+4.4); doc.text(r[1], bx+bw-3, by+i*RH+4.4, {align:"right"});
@@ -242,7 +242,6 @@ function buildPdf(q, opt={}){
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.35); doc.line(bx, gy, bx+bw, gy);
   S("bold",10,PURPLE); doc.text("Estimated Total (GHC)", bx+3, gy+4.5); doc.text(amt(t.total), bx+bw-3, gy+4.5, {align:"right"});
   doc.rect(bx, by, bw, (rowsT.length+1)*RH);
-  if(t.dep){ S("normal",8,GREY); doc.text(`Refundable deposit (GHC), paid separately: ${amt(t.dep)}`, bx+bw, gy+RH+4.5, {align:"right"}); }
   y += blockH + 7;
 
   // Conditions

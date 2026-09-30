@@ -104,7 +104,7 @@ for(const id in fieldMap){
   });
 }
 
-/* ---------- refundable deposit: 15% of the total unless typed in ---------- */
+/* ---------- refundable deposit: 15% of items + setup + delivery (less discount), added to the total ---------- */
 function syncDeposit(){
   const d = $("chDeposit");
   if(Q.depositAuto){ d.readOnly = true; d.value = totals(Q).dep ? totals(Q).dep.toFixed(2) : ""; }
@@ -462,10 +462,9 @@ function summaryText(){
   if(c.guests) lines.push(`Guests: ${c.guests}`);
   lines.push("", "*Items*");
   Q.items.filter(isFilled).forEach(i => lines.push(`• ${i.desc} — ${i.qty||0} × ${money(i.price)} = ${money(num(i.qty)*num(i.price))}`));
-  lines.push("", `Subtotal: ${money(t.sub)}`, `Setup: ${money(t.setup)}`, `Delivery: ${money(t.del)}`);
+  lines.push("", `Subtotal: ${money(t.sub)}`, `Setup: ${money(t.setup)}`, `Delivery: ${money(t.del)}`, `Refundable deposit: ${money(t.dep)}`);
   if(t.disc) lines.push(`Discount: −${money(t.disc)}`);
   lines.push(`*ESTIMATED TOTAL: ${money(t.total)}*`);
-  if(t.dep) lines.push(`Refundable deposit (paid separately${Q.depositAuto ? ", 15% of total" : ""}): ${money(t.dep)}`);
   if((Q.scope||"").trim()) lines.push("", Q.scope.trim());
   lines.push("", "Full payment is required before delivery. Full conditions are on the PDF quote.", "", BIZ.phones.replace(/\s+\|\s+/, " / "), BIZ.tagline);
   return lines.join("\n");
