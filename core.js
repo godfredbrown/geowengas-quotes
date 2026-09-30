@@ -32,7 +32,7 @@ const PAYMENT = [
 ];
 /* Signed quotes are saved to Google Drive through the Apps Script in google-drive/Code.gs.
    Paste the script's Web app URL (ends in /exec) below. Empty = Drive saving is off. */
-const DRIVE_UPLOAD = {url:"https://script.google.com/macros/s/AKfycbyEsV5CJQXDCwhn82b3kg2JA87rxxuwhkcC2_ZlcpHOkiXd_pQ-jrI4pwUCloEpSM6lgw/exec", key:"XxkFTWluQnou906QKKYblu3s"};
+const DRIVE_UPLOAD = {url:"https://script.google.com/macros/s/AKfycbz6LiP-WPvmOx3S0bxUIStImaqjovNWSEtpDNGT7gLIZOFVpH2TEBwkTDJbFL59Sj4ajg/exec", key:"XxkFTWluQnou906QKKYblu3s"};
 
 /* ---------- small helpers ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
