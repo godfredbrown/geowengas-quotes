@@ -19,6 +19,17 @@ const STD_CONDS = [
   "If an item is beyond repair, the customer shall pay its full market value. If the refundable deposit does not cover the repair cost, the customer shall pay the balance."
 ];
 const DEPOSIT_RATE = 0.15;
+/* Payment methods printed on every quote. */
+const PAYMENT = [
+  {title:"Mobile Money", accounts:[
+    {head:"Telecel Network", lines:[["Name on Account","GEOWENGA'S Events"],["Number","0504728417"]]},
+    {head:"MTN Network",     lines:[["Name on Account","GEOWENGA'S Events"],["Number","0559146957"]]}
+  ]},
+  {title:"Bank Transfer", accounts:[
+    {head:"ECOBANK", lines:[["Account Name","GEOWENGA'S EVENTS"],["Account No","1441005176208"],["Branch","Kissiman"]]},
+    {head:"GT Bank", lines:[["Account Name","GEOWENGAS ENTERPRISE"],["Account No","3214001001618"],["Branch","Opera"]]}
+  ]}
+];
 /* Signed quotes are saved to Google Drive through the Apps Script in google-drive/Code.gs.
    Paste the script's Web app URL (ends in /exec) below. Empty = Drive saving is off. */
 const DRIVE_UPLOAD = {url:"https://script.google.com/macros/s/AKfycbyEsV5CJQXDCwhn82b3kg2JA87rxxuwhkcC2_ZlcpHOkiXd_pQ-jrI4pwUCloEpSM6lgw/exec", key:"XxkFTWluQnou906QKKYblu3s"};
@@ -151,6 +162,8 @@ function paperHTML(q, opt={}){
         </div>
       </div>
     </div>
+    <div class="p-conds-h">Payment Methods</div>
+    <div class="p-pay">${PAYMENT.map((m,i) => `<div><b>${i+1}. ${esc(m.title)}</b>${m.accounts.map(a => `<div class="acc"><i>${esc(a.head)}</i>${a.lines.map(l => `<span>${esc(l[0])}: <strong>${esc(l[1])}</strong></span>`).join("")}</div>`).join("")}</div>`).join("")}</div>
     <div class="p-conds-h">Conditions</div>
     <ol class="p-conds">${(q.conditions||[]).filter(x => x.trim()).map((x,i) => `<li>${i+1}. ${boldPct(x)}</li>`).join("")}</ol>
     <div class="p-sign">
@@ -212,7 +225,7 @@ function buildPdf(q, opt={}){
   // Items
   const items = (q.items||[]).filter(isFilled);
   const body = items.map(i => [i.desc, String(i.qty||""), num(i.price)?amt(i.price):"", amt(num(i.qty)*num(i.price))]);
-  while(body.length < 8) body.push(["","","",""]);
+  while(body.length < 3) body.push(["","","",""]);
   doc.autoTable({
     startY:y, margin:{left:M,right:M,bottom:18},
     head:[["DESCRIPTION","QTY","UNIT PRICE (GHC)","AMOUNT (GHC)"]],
@@ -222,7 +235,7 @@ function buildPdf(q, opt={}){
     columnStyles:{1:{halign:"center",cellWidth:18},2:{halign:"right",cellWidth:34},3:{halign:"right",cellWidth:36}},
     didDrawPage:footer
   });
-  y = doc.lastAutoTable.finalY + 7;
+  y = doc.lastAutoTable.finalY + 6;
 
   // Scope + totals box
   const half = (W-2*M)/2;
@@ -245,17 +258,43 @@ function buildPdf(q, opt={}){
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.35); doc.line(bx, gy, bx+bw, gy);
   S("bold",10,PURPLE); doc.text("Estimated Total (GHC)", bx+3, gy+4.5); doc.text(amt(t.total), bx+bw-3, gy+4.5, {align:"right"});
   doc.rect(bx, by, bw, (rowsT.length+1)*RH);
-  y += blockH + 7;
+  y += blockH + 5;
+
+  // Payment methods (two columns)
+  {
+    const colW = (W-2*M-6)/2, LH = 3.5;
+    const colH = m => 9 + m.accounts.reduce((s,a) => s + 3.7 + a.lines.length*LH + 1.2, 0) - 2;
+    const boxH = Math.max(...PAYMENT.map(colH)), payH = 2.5 + boxH;
+    if(y + payH > 278){ doc.addPage(); footer(); y = 18; }
+    S("bold",9.8); doc.text("Payment Methods", M, y); y += 2.5;
+    doc.setDrawColor(...GOLD); doc.setLineWidth(0.35);
+    PAYMENT.forEach((m,i) => {
+      const x = M + i*(colW+6); let yy = y + 5;
+      doc.setFillColor(...FILL); doc.rect(x, y, colW, boxH, "FD");
+      S("bold",9.2,PURPLE); doc.text(`${i+1}. ${m.title}`, x+3, yy); yy += 5;
+      m.accounts.forEach(a => {
+        S("bold",8.6); doc.text(a.head, x+3, yy); yy += 3.7;
+        a.lines.forEach(l => { S("normal",8.4,GREY); doc.text(l[0]+":", x+5, yy); const w = doc.getTextWidth(l[0]+": "); S("bold",8.4); doc.text(l[1], x+5+w, yy); yy += LH; });
+        yy += 1.2;
+      });
+    });
+    y += boxH + 5;
+  }
 
   // Conditions
   const conds = (q.conditions||[]).filter(x => x.trim());
   S("normal",8.8);
   const condLines = conds.map((x,i) => doc.splitTextToSize(`${i+1}. ${x}`, W-2*M));
-  const condH = 6 + condLines.reduce((s,l) => s + l.length*3.9 + 1, 0) + (sig ? 30 : 18);
-  if(y+condH > 280){ doc.addPage(); footer(); y = 18; }
-  S("bold",9.8); doc.text("Conditions", M, y); y += 5.5;
-  condLines.forEach(l => { S("normal",8.8); doc.text(l, M, y); y += l.length*3.9 + 1; });
-  y += sig ? 16 : 10;
+  const LIMIT = 280;
+  if(y + 5.5 + (condLines[0] ? condLines[0].length*3.8 : 0) > LIMIT){ doc.addPage(); footer(); y = 18; }
+  S("bold",9.8); doc.text("Conditions", M, y); y += 5;
+  condLines.forEach(l => {
+    const h = l.length*3.6 + 0.7;
+    if(y + h > LIMIT){ doc.addPage(); footer(); y = 18; }
+    S("normal",8.6); doc.text(l, M, y); y += h;
+  });
+  y += sig ? 13 : 8;
+  if(y + (sig ? 9 : 2) > 283){ doc.addPage(); footer(); y = sig ? 30 : 22; }
 
   // Signature line
   S("normal",9.2); doc.text("Client Signature:", M, y);
@@ -337,6 +376,6 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
 }
 
-global.GW = {BIZ, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
+global.GW = {BIZ, PAYMENT, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
   encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, checkDrive};
 })(window);
