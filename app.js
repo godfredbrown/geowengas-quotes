@@ -89,12 +89,12 @@ function exampleQuote(){
 let Q = upgradeConds(migrateQuote(LS.get("gw_draft", null))) || (savedQuotes().length ? blankQuote() : exampleQuote());
 
 /* ---------- editor ---------- */
-const fieldMap = {qNo:["no"],qDate:["date"],qValid:["valid"],qStatus:["status"],cName:["client","name"],cPhone:["client","phone"],cEmail:["client","email"],cEvent:["client","event"],cDate:["client","eventDate"],cDateEnd:["client","eventEnd"],cGuests:["client","guests"],cVenue:["client","venue"],chSetup:["setup"],chDelivery:["delivery"],chDiscount:["discount"],scope:["scope"]};
+const fieldMap = {qNo:["no"],qDate:["date"],qValid:["valid"],qStatus:["status"],cName:["client","name"],cPhone:["client","phone"],cEmail:["client","email"],cEvent:["client","event"],cGuests:["client","guests"],cVenue:["client","venue"],chSetup:["setup"],chDelivery:["delivery"],chDiscount:["discount"],scope:["scope"]};
 const getPath = p => p.length === 1 ? Q[p[0]] : Q[p[0]][p[1]];
 const setPath = (p,v) => { if(p.length === 1) Q[p[0]] = v; else Q[p[0]][p[1]] = v; };
 function fillFields(){
   for(const id in fieldMap) $(id).value = getPath(fieldMap[id]) ?? "";
-  $("cDateEnd").min = Q.client.eventDate || "";
+  renderDates();
   $("chDepositAuto").checked = !!Q.depositAuto;
   syncDeposit(); renderNoHelp();
 }
@@ -104,10 +104,61 @@ for(const id in fieldMap){
     if(id === "qDate" && !Q._validTouched){ Q.valid = addDays(e.target.value,14); $("qValid").value = Q.valid; }
     if(id === "qValid") Q._validTouched = true;
     if(id === "qNo") Q._noEdited = e.target.value.trim() !== nextQuoteNo();
-    if(id === "cDate"){ $("cDateEnd").min = Q.client.eventDate || ""; if(Q.client.eventEnd && Q.client.eventEnd < Q.client.eventDate){ Q.client.eventEnd = ""; $("cDateEnd").value = ""; } }
-    if(id === "cDateEnd" && Q.client.eventEnd && Q.client.eventDate && Q.client.eventEnd < Q.client.eventDate){ Q.client.eventEnd = Q.client.eventDate; e.target.value = Q.client.eventEnd; }
     changed();
   });
+}
+
+/* ---------- event date(s): one calendar, tap the first day then the last day ---------- */
+function renderDates(){
+  const t = eventDates(Q.client);
+  $("cDatesText").textContent = t || "Choose one day or a range";
+  $("cDates").classList.toggle("empty", !t);
+}
+$("cDates").onclick = () => openCalendar();
+function openCalendar(){
+  let start = Q.client.eventDate || "", end = Q.client.eventEnd || "";
+  const today = iso(new Date());
+  let view = new Date((start || today) + "T00:00:00"); view.setDate(1);
+  const draw = () => {
+    const y = view.getFullYear(), m = view.getMonth();
+    const first = new Date(y, m, 1), days = new Date(y, m+1, 0).getDate();
+    const lead = (first.getDay() + 6) % 7; // Monday first
+    let cells = "";
+    for(let k=0;k<lead;k++) cells += `<span></span>`;
+    for(let d=1; d<=days; d++){
+      const ds = iso(new Date(y, m, d));
+      const last = end || start;
+      const cls = [ds === today ? "today" : "", ds === start ? "start" : "", ds === last && start ? "end" : "", start && end && ds > start && ds < end ? "mid" : ""].join(" ");
+      cells += `<button type="button" class="${cls}" data-d="${ds}" aria-pressed="${ds === start || ds === last}">${d}</button>`;
+    }
+    const label = !start ? "Tap the first day of the event." : !end ? `${eventDates({eventDate:start})}. Tap the last day, or Done for one day.` : eventDates({eventDate:start, eventEnd:end});
+    $("calBody").innerHTML = `
+      <div class="cal-head"><button type="button" class="btn sm" data-nav="-1" aria-label="Previous month">‹</button>
+        <b>${first.toLocaleDateString("en-GB",{month:"long", year:"numeric"})}</b>
+        <button type="button" class="btn sm" data-nav="1" aria-label="Next month">›</button></div>
+      <div class="cal-grid cal-wd">${["Mo","Tu","We","Th","Fr","Sa","Su"].map(w => `<span>${w}</span>`).join("")}</div>
+      <div class="cal-grid">${cells}</div>
+      <p class="cal-sel">${esc(label)}</p>`;
+  };
+  openModal(`<h3>Event date(s) <button class="btn sm ghost" id="mClose" type="button">Cancel</button></h3>
+    <p class="hint">Tap the first day, then the last day. For a one-day event, tap the day once.</p>
+    <div id="calBody"></div>
+    <div class="confirm"><button class="btn primary" id="calDone" type="button">Done</button><button class="btn ghost" id="calClear" type="button">Clear dates</button></div>`);
+  draw();
+  $("mClose").onclick = closeModal;
+  $("calBody").addEventListener("click", e => {
+    const nav = e.target.closest("[data-nav]");
+    if(nav){ view.setMonth(view.getMonth() + (+nav.dataset.nav)); draw(); return; }
+    const b = e.target.closest("[data-d]"); if(!b) return;
+    const d = b.dataset.d;
+    if(!start || end){ start = d; end = ""; }          // first tap, or starting over
+    else if(d < start){ start = d; }                   // tapped an earlier day: move the start
+    else if(d === start){ end = ""; }                  // same day again: one-day event
+    else { end = d; }                                  // second tap: the last day
+    draw();
+  });
+  $("calDone").onclick = () => { Q.client.eventDate = start; Q.client.eventEnd = end && end !== start ? end : ""; closeModal(); renderDates(); changed(); };
+  $("calClear").onclick = () => { start = ""; end = ""; draw(); };
 }
 
 /* ---------- refundable deposit: 15% of items + setup + delivery (less discount), added to the total ---------- */

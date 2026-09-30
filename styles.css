@@ -102,6 +102,19 @@ input[readonly]{background:var(--surface-2);color:var(--muted)}
 .pick button:hover,.pick button[aria-selected="true"]{background:var(--gold-soft)}
 .pick mark{background:none;color:var(--plum);font-weight:700}
 .pick .none{padding:10px;color:var(--muted);font-size:14px}
+.datefield{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:46px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-size:17px;text-align:left;cursor:pointer}
+.datefield.empty #cDatesText{color:var(--muted)}
+.cal-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.cal-head b{font-family:var(--serif);font-size:18px;color:var(--plum)}
+.cal-head .btn{font-size:22px;min-width:44px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-wd span{text-align:center;font-size:12px;font-weight:700;color:var(--muted);padding:4px 0}
+.cal-grid button{min-height:44px;border:0;border-radius:10px;background:transparent;font-size:16px;cursor:pointer;color:var(--fg);font-variant-numeric:tabular-nums}
+.cal-grid button:hover{background:var(--surface-2)}
+.cal-grid button.today{box-shadow:inset 0 0 0 1px var(--paper-gold)}
+.cal-grid button.mid{background:var(--gold-soft);border-radius:0}
+.cal-grid button.start,.cal-grid button.end{background:var(--accent);color:var(--accent-fg);font-weight:700}
+.cal-sel{margin:10px 0 0;font-weight:600;color:var(--plum)}
 .num-preview{font-family:var(--serif);font-size:22px;color:var(--plum);font-weight:700}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px}
 .check input{width:22px;height:22px;min-height:0;flex:none;margin-top:1px}

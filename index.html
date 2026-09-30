@@ -60,8 +60,7 @@
         <div class="f"><label for="cEmail">Email</label><input id="cEmail" type="email" autocomplete="off"></div>
         <div class="f"><label for="cEvent">Event type</label><input id="cEvent" list="eventTypes" placeholder="Wedding, funeral, birthday…">
           <datalist id="eventTypes"><option value="Wedding"><option value="Traditional marriage (engagement)"><option value="Funeral"><option value="Birthday party"><option value="Naming ceremony (outdooring)"><option value="Corporate event"><option value="Church programme"><option value="Graduation party"></datalist></div>
-        <div class="f"><label for="cDate">Event date (from)</label><input id="cDate" type="date"></div>
-        <div class="f"><label for="cDateEnd">To <span style="font-weight:400">(leave empty for one day)</span></label><input id="cDateEnd" type="date"></div>
+        <div class="f wide"><label for="cDates">Event date(s)</label><button type="button" class="datefield" id="cDates" aria-haspopup="dialog"><span id="cDatesText">Choose one day or a range</span><span aria-hidden="true">📅</span></button></div>
         <div class="f"><label for="cGuests">Guests</label><input id="cGuests" type="number" min="0" inputmode="numeric"></div>
         <div class="f wide"><label for="cVenue">Venue / location</label><input id="cVenue" placeholder="e.g. Trinity Hall, Dome"></div>
       </div>
