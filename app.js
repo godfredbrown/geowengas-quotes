@@ -356,6 +356,7 @@ $("btnMore").onclick = () => {
     ["download","Download PDF","Save the PDF on this phone"],
     ["catalog","Price list","Your usual items and rates"],
     ["numbering","Quote numbering","Prefix and where the count continues"],
+    ["drive","Check Google Drive link","Signed quotes are saved to Drive"],
     ["backup","Back up everything","Save all quotes to one file"],
     ["restore","Restore a backup","Load quotes from a backup file"]
   ];
@@ -365,7 +366,7 @@ $("btnMore").onclick = () => {
   $("modalBody").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
     const m = b.dataset.m; closeModal();
     ({new:askNew, saved:showSaved, sign:sendForSignature, signed:() => $("fileSigned").click(), copy:copySummary,
-      download:() => makePdf("download"), catalog:showCatalog, numbering:showNumbering, backup:backup, restore:() => $("fileBackup").click()})[m]();
+      download:() => makePdf("download"), catalog:showCatalog, numbering:showNumbering, drive:checkDriveLink, backup:backup, restore:() => $("fileBackup").click()})[m]();
   });
 };
 
@@ -512,6 +513,12 @@ $("fileSigned").addEventListener("change", async e => {
     setTimeout(() => toast(r.ok ? (r.duplicate ? "Already saved in Google Drive." : "Saved to Google Drive.") : "Couldn't reach Google Drive. It's still recorded here; try again later.", 4000), 5200);
   }
 });
+
+async function checkDriveLink(){
+  toast("Checking Google Drive…");
+  const r = await window.GW.checkDrive();
+  toast(r.ok ? `Google Drive is connected. Signed quotes go to "${r.folder}".` : "Can't reach Google Drive right now. Check the internet, or the Apps Script deployment.", 5000);
+}
 
 /* ---------- WhatsApp text ---------- */
 function summaryText(){

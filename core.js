@@ -21,7 +21,7 @@ const STD_CONDS = [
 const DEPOSIT_RATE = 0.15;
 /* Signed quotes are saved to Google Drive through the Apps Script in google-drive/Code.gs.
    Paste the script's Web app URL (ends in /exec) below. Empty = Drive saving is off. */
-const DRIVE_UPLOAD = {url:"", key:"XxkFTWluQnou906QKKYblu3s"};
+const DRIVE_UPLOAD = {url:"https://script.google.com/macros/s/AKfycbyEsV5CJQXDCwhn82b3kg2JA87rxxuwhkcC2_ZlcpHOkiXd_pQ-jrI4pwUCloEpSM6lgw/exec", key:"XxkFTWluQnou906QKKYblu3s"};
 
 /* ---------- small helpers ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -300,6 +300,11 @@ async function uploadSigned(blob, filename, meta={}){
     return out && out.ok ? {ok:true, url:out.url, duplicate:!!out.duplicate} : {ok:false, error:(out && out.error) || "failed"};
   }catch(e){ return {ok:false, error:String(e)}; }
 }
+async function checkDrive(){
+  if(!DRIVE_UPLOAD.url) return {ok:false, error:"not set up"};
+  try{ const r = await fetch(DRIVE_UPLOAD.url, {redirect:"follow"}); const j = await r.json(); return j && j.app === "geowengas-drive" ? {ok:true, folder:j.folder} : {ok:false, error:"unexpected reply"}; }
+  catch(e){ return {ok:false, error:String(e)}; }
+}
 const signedFileName = (no, name) => `${no}_${safeName(name)||"Client"}_SIGNED.pdf`;
 
 /* ---------- sharing ---------- */
@@ -333,5 +338,5 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
 }
 
 global.GW = {BIZ, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
-  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName};
+  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, checkDrive};
 })(window);
