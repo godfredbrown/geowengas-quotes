@@ -519,7 +519,7 @@ function summaryText(){
   if(c.guests) lines.push(`Guests: ${c.guests}`);
   lines.push("", "*Items*");
   Q.items.filter(isFilled).forEach(i => lines.push(`• ${i.desc} — ${i.qty||0} × ${money(i.price)} = ${money(num(i.qty)*num(i.price))}`));
-  lines.push("", `Subtotal: ${money(t.sub)}`, `Setup: ${money(t.setup)}`, `Delivery: ${money(t.del)}`, `Refundable deposit: ${money(t.dep)}`);
+  lines.push("", `Subtotal: ${money(t.sub)}`, `Setup: ${money(t.setup)}`, `Transportation: ${money(t.del)}`, `Refundable deposit: ${money(t.dep)}`);
   if(t.disc) lines.push(`Discount: −${money(t.disc)}`);
   lines.push(`*ESTIMATED TOTAL: ${money(t.total)}*`);
   if((Q.scope||"").trim()) lines.push("", Q.scope.trim());

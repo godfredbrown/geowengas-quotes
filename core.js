@@ -141,7 +141,7 @@ function paperHTML(q, opt={}){
         <div class="p-tot-box">
           <div><span>Subtotal (GHC)</span><span>${amt(t.sub)}</span></div>
           <div><span>Setup (GHC)</span><span>${amt(t.setup)}</span></div>
-          <div><span>Delivery (GHC)</span><span>${amt(t.del)}</span></div>
+          <div><span>Transportation (GHC)</span><span>${amt(t.del)}</span></div>
           <div><span>Refundable Deposit (GHC)</span><span>${amt(t.dep)}</span></div>
           ${t.disc ? `<div><span>Discount (GHC)</span><span>− ${amt(t.disc)}</span></div>` : ""}
           <div class="grand"><span>Estimated Total (GHC)</span><span>${amt(t.total)}</span></div>
@@ -233,7 +233,7 @@ function buildPdf(q, opt={}){
   doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M, y+2.5, half-4, scopeH);
   S("normal",8.6); doc.text(scopeLines, M+2.5, y+7);
   const bx = M+half+4, bw = W-M-bx, by = y+2.5;
-  const rowsT = [["Subtotal (GHC)",amt(t.sub)],["Setup (GHC)",amt(t.setup)],["Delivery (GHC)",amt(t.del)],["Refundable Deposit (GHC)",amt(t.dep)]];
+  const rowsT = [["Subtotal (GHC)",amt(t.sub)],["Setup (GHC)",amt(t.setup)],["Transportation (GHC)",amt(t.del)],["Refundable Deposit (GHC)",amt(t.dep)]];
   if(t.disc) rowsT.push(["Discount (GHC)","- "+amt(t.disc)]);
   doc.setFillColor(...FILL); doc.rect(bx, by+rowsT.length*RH, bw, RH, "F");
   rowsT.forEach((r,i) => { S("normal",9.2); doc.text(r[0], bx+3, by+i*RH+4.4); doc.text(r[1], bx+bw-3, by+i*RH+4.4, {align:"right"});
