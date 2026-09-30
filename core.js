@@ -35,7 +35,7 @@ function totals(q){
   const sub = (q.items||[]).reduce((s,i) => s + num(i.qty)*num(i.price), 0);
   const setup = num(q.setup), del = num(q.delivery), disc = num(q.discount);
   const base = Math.max(0, sub + setup + del - disc);
-  const dep = q.depositAuto ? Math.round(base * DEPOSIT_RATE * 100) / 100 : num(q.deposit);
+  const dep = q.depositAuto ? Math.round(sub * DEPOSIT_RATE * 100) / 100 : num(q.deposit); // 15% of the items only
   return {sub, setup, del, disc, base, dep, total: base + dep};
 }
 /* Event date, or a range like "Sat 14 Nov – Mon 16 Nov 2026". */

@@ -1,7 +1,7 @@
 /* GEOWENGAS Quote Builder — offline support with automatic updates.
    Online: always fetches the newest files (so updates appear on the next open).
    Offline or slow network: falls back to the last saved copy. */
-const CACHE = "gw-quotes-v5";
+const CACHE = "gw-quotes-v6";
 const CORE = ["./", "index.html", "sign.html", "styles.css", "core.js", "app.js", "logo.jpg",
   "vendor/jspdf.umd.min.js", "vendor/jspdf.plugin.autotable.min.js",
   "manifest.webmanifest", "icon-192.png", "icon-512.png", "favicon.png", "apple-touch-icon.png"];

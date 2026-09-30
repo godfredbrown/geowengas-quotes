@@ -161,7 +161,7 @@ function openCalendar(){
   $("calClear").onclick = () => { start = ""; end = ""; draw(); };
 }
 
-/* ---------- refundable deposit: 15% of items + setup + delivery (less discount), added to the total ---------- */
+/* ---------- refundable deposit: 15% of the items subtotal, added to the total ---------- */
 function syncDeposit(){
   const d = $("chDeposit");
   if(Q.depositAuto){ d.readOnly = true; d.value = totals(Q).dep ? totals(Q).dep.toFixed(2) : ""; }
