@@ -32,7 +32,12 @@ const migrateQuote = q => {
   return q;
 };
 /* Drafts still on the original six conditions get the new seventh one. */
-const upgradeConds = q => { if(q && q.status === "draft" && Array.isArray(q.conditions) && q.conditions.length === 6 && q.conditions.every((c,i) => c === STD_CONDS[i])) q.conditions = STD_CONDS.slice(); return q; };
+/* Every quote that isn't signed yet gets condition 7 (items beyond repair). */
+const COND7 = STD_CONDS[6];
+const upgradeConds = q => {
+  if(q && Array.isArray(q.conditions) && q.status !== "accepted" && !q.signed && !q.conditions.some(c => (c||"").trim() === COND7)) q.conditions.push(COND7);
+  return q;
+};
 
 let catalog = LS.get("gw_catalog", null);
 const catalogIsExample = !catalog;
@@ -80,6 +85,7 @@ function exampleQuote(){
   q.scope = "Includes setup from 7:00 am on the event day and breakdown after the event.\nExcludes catering, drinks and venue hire.";
   return q;
 }
+(function(){ const qs = LS.get("gw_quotes", null); if(qs){ qs.forEach(q => upgradeConds(migrateQuote(q))); LS.set("gw_quotes", qs); } })();
 let Q = upgradeConds(migrateQuote(LS.get("gw_draft", null))) || (savedQuotes().length ? blankQuote() : exampleQuote());
 
 /* ---------- editor ---------- */
@@ -325,7 +331,7 @@ function showSaved(){
   $("mClose").onclick = closeModal;
   $("modalBody").querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
     const id = b.parentElement.dataset.id, act = b.dataset.act, all = savedQuotes(), q = all.find(x => x.id === id); if(!q) return;
-    if(act === "open"){ Q = migrateQuote(JSON.parse(JSON.stringify(q))); LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Opened ${Q.no}`); }
+    if(act === "open"){ Q = upgradeConds(migrateQuote(JSON.parse(JSON.stringify(q)))); LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Opened ${Q.no}`); }
     if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
     if(act === "del"){
       const wrap = b.parentElement; wrap.innerHTML = `<span class="confirm">Delete ${esc(q.no)}? <button class="btn sm danger" type="button" data-yes>Delete</button><button class="btn sm ghost" type="button" data-no>Keep</button></span>`;
