@@ -166,6 +166,7 @@ input[readonly]{background:var(--surface-2);color:var(--muted)}
 .p-pay .acc span{display:block;color:#5f5864;padding-left:8px}
 .p-pay .acc strong{color:var(--paper-ink)}
 @media (max-width:640px){ .p-pay{grid-template-columns:1fr} }
+.p-nocash{font-style:italic;color:#a62626;font-weight:700;margin-left:8px;font-size:10px}
 .p-conds-h{font-weight:700;font-size:11.5px;margin:18px 0 5px}
 .p-conds{margin:0;padding:0;list-style:none;font-size:10.5px}
 .p-conds li{margin:3px 0}

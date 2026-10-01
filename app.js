@@ -607,7 +607,7 @@ function summaryText(){
   if(t.disc) lines.push(`Discount: −${money(t.disc)}`);
   lines.push(`*ESTIMATED TOTAL: ${money(t.total)}*`);
   if((Q.scope||"").trim()) lines.push("", Q.scope.trim());
-  lines.push("", "*Payment Methods*");
+  lines.push("", "*Payment Methods* (" + window.GW.PAYMENT_NOTE + ")");
   window.GW.PAYMENT.forEach(m => { lines.push(`_${m.title}_`); m.accounts.forEach(a => lines.push(`• ${a.head}: ${a.lines.map(l => l[1]).join(", ")}`)); });
   lines.push("", "Full payment is required before delivery. Full conditions are on the PDF quote.", "", BIZ.phones.replace(/\s+\|\s+/, " / "), BIZ.tagline);
   return lines.join("\n");

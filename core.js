@@ -20,13 +20,14 @@ const STD_CONDS = [
 ];
 const DEPOSIT_RATE = 0.15;
 /* Payment methods printed on every quote. */
+const PAYMENT_NOTE = "Cash payment is not accepted";
 const PAYMENT = [
   {title:"Mobile Money", accounts:[
     {head:"Telecel Network", lines:[["Name on Account","GEOWENGA'S Events"],["Number","0504728417"]]},
     {head:"MTN Network",     lines:[["Name on Account","GEOWENGA'S Events"],["Number","0559146957"]]}
   ]},
   {title:"Bank Transfer", accounts:[
-    {head:"ECOBANK", lines:[["Account Name","GEOWENGA'S EVENTS"],["Account No","1441005176208"],["Branch","Kissiman"]]},
+    {head:"ECOBANK", lines:[["Account Name","GEOWENGAS ENTERPRISE"],["Account No","1441005176208"],["Branch","Kissiman"]]},
     {head:"GT Bank", lines:[["Account Name","GEOWENGAS ENTERPRISE"],["Account No","3214001001618"],["Branch","Opera"]]}
   ]}
 ];
@@ -165,7 +166,7 @@ function paperHTML(q, opt={}){
         </div>
       </div>
     </div>
-    <div class="p-conds-h">Payment Methods</div>
+    <div class="p-conds-h">Payment Methods <span class="p-nocash">${esc(PAYMENT_NOTE)}</span></div>
     <div class="p-pay">${PAYMENT.map((m,i) => `<div><b>${i+1}. ${esc(m.title)}</b>${m.accounts.map(a => `<div class="acc"><i>${esc(a.head)}</i>${a.lines.map(l => `<span>${esc(l[0])}: <strong>${esc(l[1])}</strong></span>`).join("")}</div>`).join("")}</div>`).join("")}</div>
     <div class="p-conds-h">Conditions</div>
     <ol class="p-conds">${(q.conditions||[]).filter(x => x.trim()).map((x,i) => `<li>${i+1}. ${boldPct(x)}</li>`).join("")}</ol>
@@ -181,146 +182,178 @@ function paperHTML(q, opt={}){
 function hex(str){ return Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padStart(2,"0")).join(""); }
 function unhex(h){ const out = new Uint8Array(h.length/2); for(let i=0;i<out.length;i++) out[i] = parseInt(h.substr(i*2,2),16); return new TextDecoder().decode(out); }
 
+/* Builds the quote/invoice PDF. Everything must fit on ONE A4 page: the layout is drawn at scale k,
+   and if anything would run past the bottom, it is redrawn smaller (fonts and spacing) until it fits. */
 function buildPdf(q, opt={}){
+  for(let k = 1; k >= 0.42; k = Math.round((k - 0.04) * 100) / 100){
+    const r = layoutPdf(q, opt, k);
+    if(r.fits) return r.doc;
+  }
+  return layoutPdf(q, opt, 0.4, true).doc;   // last resort: smallest scale, still one page
+}
+
+function layoutPdf(q, opt, k, force){
   const { jsPDF } = global.jspdf;
   const doc = new jsPDF({unit:"mm", format:"a4"});
-  const W = 210, M = 16, PURPLE=[91,30,109], HEAD=[91,27,112], GOLD=[200,157,60], INK=[31,26,34], GREY=[90,90,90], LINE=[217,217,217], FILL=[247,247,247];
+  const W = 210, M = 16, PURPLE=[91,30,109], HEAD=[91,27,112], GOLD=[200,157,60], INK=[31,26,34], GREY=[90,90,90], LINE=[217,217,217], FILL=[247,247,247], RED=[166,38,38];
   const t = totals(q), c = q.client || {};
-  const sig = opt.signature;
-  const S = (style,size,color) => { doc.setFont("times",style); doc.setFontSize(size); doc.setTextColor(...(color||INK)); };
-  const A = (style,size,color) => { doc.setFont("helvetica",style); doc.setFontSize(size); doc.setTextColor(...(color||INK)); };
-  const footer = () => { A("bold",8,PURPLE); doc.setCharSpace(0.3); doc.text(BIZ.tagline, W/2, 287, {align:"center"}); doc.setCharSpace(0); };
+  const sig = opt.signature, inv = opt.invoice;
+  const v = n => n * k;                         // vertical distances
+  const f = n => Math.max(4.6, n * k);          // font sizes
+  const S = (style,size,color) => { doc.setFont("times",style); doc.setFontSize(f(size)); doc.setTextColor(...(color||INK)); };
+  const A = (style,size,color) => { doc.setFont("helvetica",style); doc.setFontSize(f(size)); doc.setTextColor(...(color||INK)); };
+  const FOOT_Y = 289, LIMIT = 283;
+  let overflow = false;
+  const need = (y) => { if(y > LIMIT) overflow = true; };
 
-  const inv = opt.invoice;
   doc.setProperties({title: inv ? `${inv.no} ${BIZ.name} Invoice` : `${q.no} ${BIZ.name} Quotation`, author:BIZ.name, subject: inv ? "Invoice" : "Quotation / Estimate",
     keywords:"GWQ:" + hex(JSON.stringify({kind: inv ? "invoice" : "quote", invoice: inv ? inv.no : "", no:q.no, id:q.id, check:q.check || checkCode(q), signed:!!sig, name:sig?sig.name:"", date:sig?sig.date:""}))});
 
   // Header
-  let y = 10;
-  const lw = 30, lh = lw*LOGO_RATIO;
+  let y = v(10);
+  const lw = Math.max(16, 30*k), lh = lw*LOGO_RATIO;
   if(logoData){ try{ doc.addImage(logoData, "JPEG", M, y, lw, lh); }catch(e){} }
-  S("bold",22,PURPLE); doc.text(BIZ.name, W-M, y+9, {align:"right"});
-  A("bold",8.5,GOLD); doc.text(BIZ.sub, W-M, y+14, {align:"right"});
-  A("normal",7.5,[51,51,51]);
-  doc.text(BIZ.phones, W-M, y+18.5, {align:"right"});
-  doc.text(`${BIZ.email}  |  ${BIZ.addr}`, W-M, y+22, {align:"right"});
-  doc.text(BIZ.social, W-M, y+25.5, {align:"right"});
-  y += lh + 9;
-  S("bold",21,PURPLE); doc.text(inv ? "INVOICE" : "QUOTATION / ESTIMATE", M, y); y += 6;
+  const hs = lh / (30*LOGO_RATIO);              // header text follows the logo size
+  S("bold",22*hs/k,PURPLE); doc.text(BIZ.name, W-M, y+9*hs, {align:"right"});
+  A("bold",8.5*hs/k,GOLD); doc.text(BIZ.sub, W-M, y+14*hs, {align:"right"});
+  A("normal",7.5*hs/k,[51,51,51]);
+  doc.text(BIZ.phones, W-M, y+18.5*hs, {align:"right"});
+  doc.text(`${BIZ.email}  |  ${BIZ.addr}`, W-M, y+22*hs, {align:"right"});
+  doc.text(BIZ.social, W-M, y+25.5*hs, {align:"right"});
+  y += lh + v(9);
+  S("bold",21,PURPLE); doc.text(inv ? "INVOICE" : "QUOTATION / ESTIMATE", M, y); y += v(6);
 
   // Meta
-  const cw = (W-2*M)/3;
+  const cw = (W-2*M)/3, mh = v(9);
   doc.setFillColor(...FILL); doc.setDrawColor(...GOLD); doc.setLineWidth(0.35);
-  doc.rect(M,y,W-2*M,9,"FD"); doc.line(M+cw,y,M+cw,y+9); doc.line(M+2*cw,y,M+2*cw,y+9);
+  doc.rect(M,y,W-2*M,mh,"FD"); doc.line(M+cw,y,M+cw,y+mh); doc.line(M+2*cw,y,M+2*cw,y+mh);
   S("normal",9);
-  (inv ? [["INVOICE NO:  ",inv.no],["DATE:  ",dmy(inv.date)],["QUOTE REF:  ",q.no]] : [["QUOTE NO:  ",q.no],["DATE:  ",dmy(q.date)],["VALID UNTIL:  ",dmy(q.valid)]]).forEach((m,i) => doc.text(m[0]+(m[1]||""), M+i*cw+2.5, y+5.8));
-  y += 15;
+  (inv ? [["INVOICE NO:  ",inv.no],["DATE:  ",dmy(inv.date)],["QUOTE REF:  ",q.no]] : [["QUOTE NO:  ",q.no],["DATE:  ",dmy(q.date)],["VALID UNTIL:  ",dmy(q.valid)]]).forEach((m,i) => doc.text(m[0]+(m[1]||""), M+i*cw+2.5, y+mh*0.64));
+  y += mh + v(6);
 
   // Client
-  S("bold",9.5); doc.text("CLIENT / EVENT DETAILS", M, y); y += 2.5;
+  S("bold",9.5); doc.text("CLIENT / EVENT DETAILS", M, y); y += v(2.5);
   const cl = clientRows(c);
-  const rowsN = Math.max(2, Math.ceil(cl.length/2)); const boxH = rowsN*5+3;
+  const rowsN = Math.max(2, Math.ceil(cl.length/2)), crh = v(5); const boxH = rowsN*crh+v(3);
   doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M,y,W-2*M,boxH);
-  cl.forEach((x,i) => { const col=i%2, row=Math.floor(i/2); const xx=M+2.5+col*(W-2*M)/2, yy=y+5+row*5;
+  cl.forEach((x,i) => { const col=i%2, row=Math.floor(i/2); const xx=M+2.5+col*(W-2*M)/2, yy=y+v(5)+row*crh;
     S("normal",8.8,GREY); doc.text(x[0]+":", xx, yy); const w = doc.getTextWidth(x[0]+": ");
     S("normal",8.8); doc.text(doc.splitTextToSize(String(x[1]), (W-2*M)/2-w-5)[0], xx+w, yy); });
-  y += boxH + 5;
+  y += boxH + v(5);
 
   // Items
   const items = (q.items||[]).filter(isFilled);
   const body = items.map(i => [i.desc, String(i.qty||""), num(i.price)?amt(i.price):"", amt(num(i.qty)*num(i.price))]);
   while(body.length < 3) body.push(["","","",""]);
   doc.autoTable({
-    startY:y, margin:{left:M,right:M,bottom:18},
+    startY:y, margin:{left:M,right:M,bottom:6},
     head:[["DESCRIPTION","QTY","UNIT PRICE (GHC)","AMOUNT (GHC)"]],
     body, theme:"grid",
-    styles:{font:"times",fontSize:9,textColor:INK,lineColor:LINE,lineWidth:0.25,cellPadding:1.8,minCellHeight:6},
-    headStyles:{fillColor:HEAD,textColor:255,fontStyle:"bold",fontSize:8.5,halign:"center",lineColor:HEAD},
-    columnStyles:{1:{halign:"center",cellWidth:18},2:{halign:"right",cellWidth:34},3:{halign:"right",cellWidth:36}},
-    didDrawPage:footer
+    styles:{font:"times",fontSize:f(9),textColor:INK,lineColor:LINE,lineWidth:0.25,cellPadding:Math.max(0.6, 1.8*k),minCellHeight:v(6)},
+    headStyles:{fillColor:HEAD,textColor:255,fontStyle:"bold",fontSize:f(8.5),halign:"center",lineColor:HEAD},
+    columnStyles:{1:{halign:"center",cellWidth:18},2:{halign:"right",cellWidth:34},3:{halign:"right",cellWidth:36}}
   });
-  y = doc.lastAutoTable.finalY + 6;
+  if(doc.getNumberOfPages() > 1) overflow = true;
+  y = doc.lastAutoTable.finalY + v(6);
 
   // Scope + totals box
   const half = (W-2*M)/2;
   S("normal",8.6);
   const scopeLines = doc.splitTextToSize(q.scope||"", half-8);
-  const scopeH = Math.max(14, scopeLines.length*3.8+5);
-  const RH = 6.6, totRows = 5 + (t.disc?1:0);
-  const blockH = Math.max(scopeH+5, totRows*RH+2.5);
-  if(y+blockH > 272){ doc.addPage(); footer(); y = 18; }
+  const SL = v(3.8), scopeH = Math.max(v(14), scopeLines.length*SL+v(5));
+  const RH = v(6.6), totRows = 5 + (t.disc?1:0);
+  const blockH = Math.max(scopeH+v(5), totRows*RH+v(2.5));
+  need(y + blockH);
   S("bold",9.5); doc.text("Scope / Inclusions / Exclusions", M, y);
-  doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M, y+2.5, half-4, scopeH);
-  S("normal",8.6); doc.text(scopeLines, M+2.5, y+7);
-  const bx = M+half+4, bw = W-M-bx, by = y+2.5;
+  doc.setDrawColor(...LINE); doc.setLineWidth(0.3); doc.rect(M, y+v(2.5), half-4, scopeH);
+  S("normal",8.6); doc.text(scopeLines, M+2.5, y+v(7), {lineHeightFactor:1.15});
+  const bx = M+half+4, bw = W-M-bx, by = y+v(2.5);
   const rowsT = [["Subtotal (GHC)",amt(t.sub)],["Setup (GHC)",amt(t.setup)],["Transportation (GHC)",amt(t.del)],["Refundable Deposit (GHC)",amt(t.dep)]];
   if(t.disc) rowsT.push(["Discount (GHC)","- "+amt(t.disc)]);
   doc.setFillColor(...FILL); doc.rect(bx, by+rowsT.length*RH, bw, RH, "F");
-  rowsT.forEach((r,i) => { S("normal",9.2); doc.text(r[0], bx+3, by+i*RH+4.4); doc.text(r[1], bx+bw-3, by+i*RH+4.4, {align:"right"});
+  rowsT.forEach((r,i) => { S("normal",9.2); doc.text(r[0], bx+3, by+i*RH+RH*0.67); doc.text(r[1], bx+bw-3, by+i*RH+RH*0.67, {align:"right"});
     if(i){ doc.setDrawColor(...LINE); doc.setLineWidth(0.25); doc.line(bx, by+i*RH, bx+bw, by+i*RH); } });
   const gy = by + rowsT.length*RH;
   doc.setDrawColor(...GOLD); doc.setLineWidth(0.35); doc.line(bx, gy, bx+bw, gy);
-  S("bold",10,PURPLE); doc.text(inv ? "Total Due (GHC)" : "Estimated Total (GHC)", bx+3, gy+4.5); doc.text(amt(t.total), bx+bw-3, gy+4.5, {align:"right"});
+  S("bold",10,PURPLE); doc.text(inv ? "Total Due (GHC)" : "Estimated Total (GHC)", bx+3, gy+RH*0.68); doc.text(amt(t.total), bx+bw-3, gy+RH*0.68, {align:"right"});
   doc.rect(bx, by, bw, (rowsT.length+1)*RH);
-  y += blockH + 5;
+  y += blockH + v(5);
 
-  // Payment methods (two columns)
+  // Payment methods (two boxes side by side) + "Cash payment is not accepted"
   {
-    const colW = (W-2*M-6)/2, LH = 3.5;
-    const colH = m => 9 + m.accounts.reduce((s,a) => s + 3.7 + a.lines.length*LH + 1.2, 0) - 2;
-    const boxH = Math.max(...PAYMENT.map(colH)), payH = 2.5 + boxH;
-    if(y + payH > 278){ doc.addPage(); footer(); y = 18; }
-    S("bold",9.8); doc.text("Payment Methods", M, y); y += 2.5;
+    const colW = (W-2*M-6)/2, LH = v(3.5);
+    const colH = m => v(9) + m.accounts.reduce((s,a) => s + v(3.7) + a.lines.length*LH + v(1.2), 0) - v(2);
+    const boxH = Math.max(...PAYMENT.map(colH));
+    need(y + v(2.5) + boxH);
+    S("bold",9.8); doc.text("Payment Methods", M, y);
+    const hw = doc.getTextWidth("Payment Methods");
+    S("bolditalic",9.2,RED); doc.text(PAYMENT_NOTE, M + hw + 4, y);
+    y += v(2.5);
     doc.setDrawColor(...GOLD); doc.setLineWidth(0.35);
     PAYMENT.forEach((m,i) => {
-      const x = M + i*(colW+6); let yy = y + 5;
+      const x = M + i*(colW+6); let yy = y + v(5);
       doc.setFillColor(...FILL); doc.rect(x, y, colW, boxH, "FD");
-      S("bold",9.2,PURPLE); doc.text(`${i+1}. ${m.title}`, x+3, yy); yy += 5;
+      S("bold",9.2,PURPLE); doc.text(`${i+1}. ${m.title}`, x+3, yy); yy += v(5);
       m.accounts.forEach(a => {
-        S("bold",8.6); doc.text(a.head, x+3, yy); yy += 3.7;
+        S("bold",8.6); doc.text(a.head, x+3, yy); yy += v(3.7);
         a.lines.forEach(l => { S("normal",8.4,GREY); doc.text(l[0]+":", x+5, yy); const w = doc.getTextWidth(l[0]+": "); S("bold",8.4); doc.text(l[1], x+5+w, yy); yy += LH; });
-        yy += 1.2;
+        yy += v(1.2);
       });
     });
-    y += boxH + 5;
+    y += boxH + v(5);
   }
 
-  // Conditions
+  // Conditions — one column normally, two columns once the page is getting tight
   const conds = (q.conditions||[]).filter(x => x.trim());
-  S("normal",8.8);
-  const condLines = conds.map((x,i) => doc.splitTextToSize(`${i+1}. ${x}`, W-2*M));
-  const LIMIT = 280;
-  if(y + 5.5 + (condLines[0] ? condLines[0].length*3.8 : 0) > LIMIT){ doc.addPage(); footer(); y = 18; }
-  S("bold",9.8); doc.text("Conditions", M, y); y += 5;
-  condLines.forEach(l => {
-    const h = l.length*3.6 + 0.7;
-    if(y + h > LIMIT){ doc.addPage(); footer(); y = 18; }
-    S("normal",8.6); doc.text(l, M, y); y += h;
-  });
-  if(inv) return doc;   // invoices have no signature lines
-  y += sig ? 13 : 8;
-  if(y + (sig ? 9 : 2) > 283){ doc.addPage(); footer(); y = sig ? 30 : 22; }
-
-  // Signature line
-  S("normal",9.2); doc.text("Client Signature:", M, y);
-  doc.setDrawColor(68,68,68); doc.setLineWidth(0.25);
-  const sx = M + doc.getTextWidth("Client Signature:") + 3, sw = 52;
-  doc.line(sx, y+0.8, sx+sw, y+0.8);
-  const dLabelX = sx + sw + 8; doc.text("Date:", dLabelX, y);
-  const dx = dLabelX + doc.getTextWidth("Date:") + 3, dw = 36; doc.line(dx, y+0.8, dx+dw, y+0.8);
-  if(sig){
-    if(sig.img){ try{ const h = 13, w = Math.min(sw, h*sig.ratio); doc.addImage(sig.img, "PNG", sx+1, y-h+0.3, w, h); }catch(e){} }
-    S("normal",9.2); doc.text(dmy(sig.date), dx+1.5, y-0.8);
-    S("normal",7.8,GREY);
-    doc.text(`Signed by ${sig.name} on ${new Date(sig.signedAt).toLocaleString("en-GB")}  ·  Check code ${q.check || checkCode(q)}`, M, y+6);
-  } else if(opt.fillable && jsPDF.AcroForm){
-    try{
-      const F = jsPDF.AcroForm;
-      const n = new F.TextField(); n.fieldName = "ClientSignature"; n.Rect = [sx+0.5, y-5.5, sw-1, 6]; n.fontSize = 10; n.value = ""; doc.addField(n);
-      const d = new F.TextField(); d.fieldName = "SignDate"; d.Rect = [dx+0.5, y-5.5, dw-1, 6]; d.fontSize = 10; d.value = ""; doc.addField(d);
-    }catch(e){}
+  const twoCol = k < 0.92;
+  const colW2 = twoCol ? (W-2*M-6)/2 : W-2*M;
+  S("normal",8.6);
+  const condLines = conds.map((x,i) => doc.splitTextToSize(`${i+1}. ${x}`, colW2));
+  const CL = v(3.6), CG = v(0.7);
+  const hOf = arr => arr.reduce((s,l) => s + l.length*CL + CG, 0);
+  let split = condLines.length;
+  if(twoCol){ // balance the two columns
+    let best = 1, bestH = Infinity;
+    for(let s2 = 1; s2 < condLines.length; s2++){ const h = Math.max(hOf(condLines.slice(0,s2)), hOf(condLines.slice(s2))); if(h < bestH){ bestH = h; best = s2; } }
+    split = best;
   }
-  return doc;
+  const condH = Math.max(hOf(condLines.slice(0,split)), hOf(condLines.slice(split)));
+  S("bold",9.8); doc.text("Conditions", M, y); y += v(5);
+  [condLines.slice(0,split), condLines.slice(split)].forEach((block, ci) => {
+    let yy = y; const x = M + ci*(colW2+6);
+    block.forEach(l => { S("normal",8.6); doc.text(l, x, yy, {lineHeightFactor: CL / (f(8.6)*0.3528)}); yy += l.length*CL + CG; });
+  });
+  y += condH;
+  need(y);
+
+  if(!inv){
+    y += v(sig ? 13 : 8);
+    need(y + (sig ? v(7) : 1));
+    // Signature line
+    S("normal",9.2); doc.text("Client Signature:", M, y);
+    doc.setDrawColor(68,68,68); doc.setLineWidth(0.25);
+    const sx = M + doc.getTextWidth("Client Signature:") + 3, sw = 52;
+    doc.line(sx, y+0.8, sx+sw, y+0.8);
+    const dLabelX = sx + sw + 8; doc.text("Date:", dLabelX, y);
+    const dx = dLabelX + doc.getTextWidth("Date:") + 3, dw = 36; doc.line(dx, y+0.8, dx+dw, y+0.8);
+    if(sig){
+      if(sig.img){ try{ const h = Math.max(8, 13*k), w = Math.min(sw, h*sig.ratio); doc.addImage(sig.img, "PNG", sx+1, y-h+0.3, w, h); }catch(e){} }
+      S("normal",9.2); doc.text(dmy(sig.date), dx+1.5, y-0.8);
+      S("normal",7.8,GREY);
+      doc.text(`Signed by ${sig.name} on ${new Date(sig.signedAt).toLocaleString("en-GB")}  ·  Check code ${q.check || checkCode(q)}`, M, y+v(6));
+    } else if(opt.fillable && jsPDF.AcroForm){
+      try{
+        const F = jsPDF.AcroForm;
+        const n = new F.TextField(); n.fieldName = "ClientSignature"; n.Rect = [sx+0.5, y-5.5, sw-1, 6]; n.fontSize = 10; n.value = ""; doc.addField(n);
+        const d = new F.TextField(); d.fieldName = "SignDate"; d.Rect = [dx+0.5, y-5.5, dw-1, 6]; d.fontSize = 10; d.value = ""; doc.addField(d);
+      }catch(e){}
+    }
+  }
+
+  // Footer
+  A("bold",8,PURPLE); doc.setFontSize(8); doc.setCharSpace(0.3); doc.text(BIZ.tagline, W/2, FOOT_Y, {align:"center"}); doc.setCharSpace(0);
+  if(doc.getNumberOfPages() > 1) overflow = true;
+  return {doc, fits: !overflow || force};
 }
 
 /* Reads the quote reference that buildPdf() stores inside every PDF it makes. */
@@ -382,6 +415,6 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
 }
 
-global.GW = {BIZ, PAYMENT, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
+global.GW = {BIZ, PAYMENT, PAYMENT_NOTE, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
   encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, invoiceFileName, checkDrive};
 })(window);
