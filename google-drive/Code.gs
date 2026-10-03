@@ -90,7 +90,7 @@ function saveReceipt(folder, name, bytes, r) {
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]).toUpperCase() === no) {
-      return String(rows[i][1]).toUpperCase() === code ? { ok: true, duplicate: true } : { ok: false, error: "receipt number already used" };
+      return String(rows[i][1]).toUpperCase() === code ? { ok: true, duplicate: true, registered: true } : { ok: false, error: "receipt number already used" };
     }
   }
   let url = "";
@@ -99,7 +99,7 @@ function saveReceipt(folder, name, bytes, r) {
   const t = v => String(v == null ? "" : v).slice(0, 500);
   sh.appendRow([no, code, t(r.date), t(r.receivedFrom), Number(r.amount) || 0, t(r.method), t(r.ref), t(r.desc),
     t(r.invoiceNo), t(r.quoteNo), Number(r.balance) || 0, Number(r.total) || 0, t(r.issuedAt), url, "Valid"]);
-  return { ok: true, url: url };
+  return { ok: true, registered: true, url: url };
 }
 
 function verifyReceipt(no, code) {

@@ -672,9 +672,10 @@ async function registerReceipt(quoteId, idx, loud, blob){
     receipt:{no:r.no, code:r.code, date:r.date, receivedFrom:r.from, amount:r.amount.toFixed(2), method:r.method, ref:r.ref, desc:r.desc,
       invoiceNo:r.invoiceNo, quoteNo:r.quoteNo, balance:r.balance.toFixed(2), total:r.total.toFixed(2), issuedAt:new Date(r.issuedAt).toISOString()}
   });
-  r.registered = !!up.ok; list[qi].receipts[idx] = r; LS.set("gw_quotes", list);
+  r.registered = !!(up.ok && up.registered); list[qi].receipts[idx] = r; LS.set("gw_quotes", list);
   if(Q.id === quoteId){ Q.receipts = list[qi].receipts; LS.set("gw_draft", Q); renderPaper(); }
-  const msg = up.ok ? `Receipt ${r.no} saved to Google Drive and ready for QR checks.`
+  const msg = up.ok && up.registered ? `Receipt ${r.no} saved to Google Drive and ready for QR checks.`
+    : up.ok ? `Receipt ${r.no} saved to Google Drive. Its QR check will work once the Apps Script is updated (see google-drive/SETUP.md); then tap Register.`
     : /pin/i.test(up.error||"") ? "Receipt sent, but the Receipt PIN is wrong or missing, so its QR check won't work yet. Fix it in More → Receipt PIN, then tap Register."
     : "Receipt sent, but Google Drive couldn't be reached. Open Send receipt later and tap Register.";
   setTimeout(() => toast(msg, 6000), loud ? 0 : 2500);

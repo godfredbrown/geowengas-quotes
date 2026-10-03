@@ -374,7 +374,7 @@ async function uploadSigned(blob, filename, meta={}){
     const body = JSON.stringify({key:DRIVE_UPLOAD.key, filename, pdf:b64, ...meta});
     const res = await fetch(DRIVE_UPLOAD.url, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body, redirect:"follow"});
     const out = await res.json().catch(() => ({ok:res.ok}));
-    return out && out.ok ? {ok:true, url:out.url, duplicate:!!out.duplicate} : {ok:false, error:(out && out.error) || "failed"};
+    return out && out.ok ? {ok:true, url:out.url, duplicate:!!out.duplicate, registered:!!out.registered} : {ok:false, error:(out && out.error) || "failed"};
   }catch(e){ return {ok:false, error:String(e)}; }
 }
 async function checkDrive(){
