@@ -40,6 +40,7 @@ If you change the list of files the app needs offline, update `CORE` in `sw.js` 
 
 - **Save** keeps the quote on the phone. **Send PDF** saves it, marks it Sent and opens the share menu so she can pick WhatsApp.
 - **Send Invoice** turns the quote into an invoice (INV-… number, no signature lines, "Total Due") and shares it like the quote. A copy is saved to Google Drive.
+- **Send Receipt** records a payment against the quote: amount in figures and words, description, invoice/quote number and balance due are filled in automatically. Mum signs on the screen, the receipt (A5 landscape) is shared like the quote, saved to Google Drive and registered so its QR code can be checked at `verify.html`.
 - **See quote** shows the finished quote exactly as the client will see it.
 - **More → Send for signature** sends the client a link. They review the quote, sign with a finger and send the signed PDF back.
 - **More → Record a signed quote** opens the signed PDF the client sent back. The quote is marked Accepted if the prices match what was sent, or flagged if they don't.

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Verify a GEOWENGAS receipt</title>
+<meta name="theme-color" content="#5b1e6d">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="stylesheet" href="styles.css">
+<style>
+.vwrap{max-width:620px;margin:0 auto;padding-inline:16px;padding-block:20px 60px;display:flex;flex-direction:column;gap:16px}
+.vwrap h1{font-family:var(--serif);color:var(--plum);font-size:24px;margin:0}
+.result{border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.result.ok{background:color-mix(in srgb,var(--ok) 12%,var(--surface));border:2px solid var(--ok)}
+.result.bad{background:color-mix(in srgb,var(--danger) 10%,var(--surface));border:2px solid var(--danger)}
+.result.wait{background:var(--surface);border:1px solid var(--line)}
+.result h2{margin:0;font-size:20px}
+.result.ok h2{color:var(--ok)} .result.bad h2{color:var(--danger)}
+.facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:15px}
+.facts span{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="bar"><div class="bar-in"><div class="brand"><img src="logo.jpg" alt="GEOWENGAS Event Solutions logo"><div><b>GEOWENGAS</b><span>RECEIPT CHECK</span></div></div></div></header>
+<main class="vwrap">
+  <h1>Is this receipt genuine?</h1>
+  <div id="result" class="result wait"><p style="margin:0">Checking…</p></div>
+  <section class="card">
+    <h2>Check a receipt by hand</h2>
+    <div class="grid">
+      <div class="f"><label for="vNo">Receipt no.</label><input id="vNo" placeholder="RC-2026-001" autocomplete="off"></div>
+      <div class="f"><label for="vCode">Verification code</label><input id="vCode" placeholder="ABCD-EFGH" autocomplete="off"></div>
+    </div>
+    <div style="margin-top:12px"><button class="btn primary" id="vGo" type="button">Check receipt</button></div>
+    <p class="note">Both are printed on the receipt, next to the QR code. Questions? WhatsApp GEOWENGAS on <b>+233 531 099 939</b>.</p>
+  </section>
+</main>
+<script src="core.js"></script>
+<script>
+(function(){
+const {verifyReceipt, esc, money, dmy} = window.GW;
+const $ = id => document.getElementById(id);
+function show(cls, html){ const r = $("result"); r.className = "result " + cls; r.innerHTML = html; }
+async function check(no, code){
+  no = String(no||"").trim().toUpperCase(); code = String(code||"").replace(/[^A-Za-z0-9]/g,"").toUpperCase();
+  if(!no || code.length < 8){ show("wait", "<p style='margin:0'>Scan the QR code on the receipt, or type the receipt number and code below.</p>"); return; }
+  $("vNo").value = no; $("vCode").value = code.slice(0,4) + "-" + code.slice(4);
+  show("wait", "<p style='margin:0'>Checking with GEOWENGAS records…</p>");
+  const r = await verifyReceipt(no, code);
+  if(r && r.ok && r.valid){
+    const x = r.receipt;
+    show("ok", `<h2>✓ Genuine receipt</h2>
+      <div class="facts">
+        <span>Receipt no.</span><b>${esc(x.no)}</b>
+        <span>Date</span><b>${esc(dmy(x.date))}</b>
+        <span>Received from</span><b>${esc(x.receivedFrom)}</b>
+        <span>Amount</span><b>${money(x.amount)}</b>
+        <span>Payment method</span><b>${esc(x.method)}</b>
+        <span>For</span><b>${esc(x.desc)}</b>
+        <span>Invoice / Quote</span><b>${esc([x.invoiceNo, x.quoteNo].filter(Boolean).join(" / "))}</b>
+        <span>Balance due</span><b>${money(x.balance)}</b>
+      </div>
+      <p class="note" style="margin:0">If any figure on the paper receipt is different from this, the paper copy has been changed.</p>`);
+  } else if(r && r.ok && !r.valid){
+    show("bad", `<h2>✗ Not a genuine receipt</h2><p style="margin:0">GEOWENGAS has no receipt ${esc(no)} with this code. Please contact GEOWENGAS on <b>+233 531 099 939</b> before accepting it.</p>`);
+  } else {
+    show("wait", `<p style="margin:0">Couldn't reach GEOWENGAS records right now. Check your internet and try again.</p>`);
+  }
+}
+const h = decodeURIComponent(location.hash.slice(1)); const dot = h.lastIndexOf(".");
+check(dot > 0 ? h.slice(0,dot) : "", dot > 0 ? h.slice(dot+1) : "");
+$("vGo").onclick = () => check($("vNo").value, $("vCode").value);
+})();
+</script>
+</body>
+</html>

@@ -385,6 +385,150 @@ async function checkDrive(){
 const signedFileName = (no, name) => `${no}_${safeName(name)||"Client"}_SIGNED.pdf`;
 const invoiceFileName = (no, name, suffix="") => `${no}_${safeName(name)||"Client"}_INVOICE${suffix}.pdf`;
 
+
+/* ---------- receipts ---------- */
+/* Amount in words, Ghana style: "One Thousand, Two Hundred and Seventy-Five Ghana Cedis, Fifty Pesewas Only" */
+function amountInWords(n){
+  n = Math.round((Number(n)||0) * 100) / 100;
+  const ones = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const two = x => x < 20 ? ones[x] : tens[Math.floor(x/10)] + (x%10 ? "-" + ones[x%10] : "");
+  const three = x => { const h = Math.floor(x/100), r = x%100; return (h ? ones[h] + " Hundred" + (r ? " and " : "") : "") + (r ? two(r) : ""); };
+  const words = x => {
+    if(x === 0) return "Zero";
+    const parts = []; const scales = [[1e9,"Billion"],[1e6,"Million"],[1e3,"Thousand"]];
+    for(const [v, name] of scales){ if(x >= v){ parts.push(three(Math.floor(x/v)) + " " + name); x %= v; } }
+    if(x){ parts.push((parts.length && x < 100 ? "and " : "") + three(x)); }
+    return parts.join(", ").replace(", and ", " and ");
+  };
+  const cedis = Math.floor(n), pes = Math.round((n - cedis) * 100);
+  let s = words(cedis) + (cedis === 1 ? " Ghana Cedi" : " Ghana Cedis");
+  if(pes) s += ", " + words(pes) + (pes === 1 ? " Pesewa" : " Pesewas");
+  return s + " Only";
+}
+
+/* Description line for a receipt: event, dates, venue, guests. */
+function receiptDescription(q){
+  const c = q.client || {};
+  const bits = [];
+  bits.push((c.event || "Event") + (c.name ? ` for ${c.name}` : ""));
+  const d = eventDates(c); if(d) bits.push(d);
+  if(c.venue) bits.push(c.venue);
+  if(c.guests) bits.push(`${c.guests} guests`);
+  return bits.join(" · ");
+}
+
+function randomCode(len=8){
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; const a = new Uint8Array(len);
+  (global.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_,i) => a[i] = Math.floor(Math.random()*256));
+  return Array.from(a, b => abc[b % abc.length]).join("");
+}
+function verifyUrl(r){
+  const base = (global.location && /^https?:/.test(location.protocol)) ? new URL("verify.html", location.href).href : "https://godfredbrown.github.io/geowengas-quotes/verify.html";
+  return `${base}#${encodeURIComponent(r.no)}.${r.code}`;
+}
+
+/* Receipt PDF — A5 landscape, laid out like 04_GEOWENGAS_Receipt_Template_A5_Landscape. */
+function buildReceiptPdf(r){
+  const { jsPDF } = global.jspdf;
+  const doc = new jsPDF({unit:"mm", format:"a5", orientation:"landscape"});
+  const W = 210, H = 148, M = 12;
+  const PURPLE=[91,30,109], GOLD=[200,157,60], INK=[31,26,34], GREY=[90,90,90], LINE=[217,217,217], FILL=[247,247,247], LAV=[240,230,244];
+  const A = (style,size,color) => { doc.setFont("helvetica",style); doc.setFontSize(size); doc.setTextColor(...(color||INK)); };
+  const S = (style,size,color) => { doc.setFont("times",style); doc.setFontSize(size); doc.setTextColor(...(color||INK)); };
+  doc.setProperties({title:`${r.no} ${BIZ.name} Receipt`, author:BIZ.name, subject:"Official Receipt",
+    keywords:"GWQ:" + hex(JSON.stringify({kind:"receipt", receipt:r.no, code:r.code, no:r.quoteNo, id:r.quoteId}))});
+
+  // Header
+  const lw = 22, lh = lw*LOGO_RATIO;
+  if(logoData){ try{ doc.addImage(logoData, "JPEG", M, 7, lw, lh); }catch(e){} }
+  S("bold",12.5,PURPLE); doc.text(BIZ.name, W-M, 12.5, {align:"right"});
+  A("bold",7.5,GOLD); doc.text(BIZ.sub, W-M, 16.5, {align:"right"});
+  A("normal",6.4,[51,51,51]);
+  doc.text(BIZ.phones, W-M, 20.3, {align:"right"});
+  doc.text(`${BIZ.email}  |  ${BIZ.addr}`, W-M, 23.6, {align:"right"});
+  doc.text(BIZ.social, W-M, 26.9, {align:"right"});
+
+  // Title + meta row
+  S("bold",15,PURPLE); doc.text("OFFICIAL RECEIPT", M, 36.5);
+  let y = 39.5; const mh = 9, cw = (W-2*M)/3;
+  doc.setFillColor(...FILL); doc.setDrawColor(...GOLD); doc.setLineWidth(0.35);
+  doc.rect(M, y, W-2*M, mh, "FD"); doc.line(M+cw, y, M+cw, y+mh); doc.line(M+2*cw, y, M+2*cw, y+mh);
+  [["RECEIPT NO:  ", r.no], ["DATE:  ", dmy(r.date)], ["PAYMENT METHOD:  ", r.method]].forEach((m,i) => {
+    A("normal",7,GREY); doc.text(m[0], M+i*cw+3, y+5.7); const w = doc.getTextWidth(m[0]);
+    let fz = 7.4; A("bold",fz); while(doc.getTextWidth(String(m[1]||"")) > cw-w-5 && fz > 5.2){ fz -= 0.2; A("bold",fz); }
+    doc.text(doc.splitTextToSize(String(m[1]||""), cw-w-5)[0] || "", M+i*cw+3+w, y+5.7);
+  });
+  y += mh + 8;
+
+  // Received from
+  A("bold",8); doc.text("RECEIVED FROM:", M, y); const rw = doc.getTextWidth("RECEIVED FROM:  ");
+  A("normal",8.6); doc.text(doc.splitTextToSize(r.from || "", W-2*M-rw)[0] || "", M+rw, y-0.4);
+  doc.setDrawColor(...INK); doc.setLineWidth(0.25); doc.line(M+rw-1, y+1, W-M, y+1);
+  y += 4.5;
+
+  // Detail table
+  const labW = 50, valW = W-2*M-labW;
+  const rows = [
+    ["Amount Received (figures)", `GHC ${amt(r.amount)}`, true],
+    ["Amount Received in words", amountInWords(r.amount)],
+    ["For / Description", r.desc || ""],
+    ["Invoice / Quote No. / Ref No.", [r.invoiceNo, r.quoteNo, r.ref ? `Ref: ${r.ref}` : ""].filter(Boolean).join("  /  ")],
+    ["Balance Due", r.balance > 0.004 ? `GHC ${amt(r.balance)}   (Total GHC ${amt(r.total)} · Paid to date GHC ${amt(r.paidToDate)})` : `GHC 0.00   (Paid in full · Total GHC ${amt(r.total)})`, true]
+  ];
+  let fs = 7.8;
+  const lay = () => rows.map(rw2 => { A(rw2[2] ? "bold" : "normal", fs); const lines = doc.splitTextToSize(String(rw2[1]), valW-6); return {lines, h: Math.max(7.6, lines.length*3.4 + 3.6)}; });
+  let L = lay(); while(L.reduce((s,x) => s + x.h, 0) > 46 && fs > 6.2){ fs -= 0.3; L = lay(); }
+  rows.forEach((rw2, i) => {
+    const h = L[i].h;
+    doc.setFillColor(...LAV); doc.setDrawColor(...LINE); doc.setLineWidth(0.3);
+    doc.rect(M, y, labW, h, "FD"); doc.rect(M+labW, y, valW, h, "S");
+    A("bold",7.2,PURPLE); doc.text(rw2[0], M+2.5, y+4.6);
+    A(rw2[2] ? "bold" : "normal", fs, i === 4 && r.balance <= 0.004 ? [31,122,77] : INK);
+    doc.text(L[i].lines, M+labW+3, y+4.6, {lineHeightFactor:1.2});
+    y += h;
+  });
+
+  // Signature
+  const sy = Math.max(y + 18, 123);
+  A("normal",8); doc.text("Authorized Signature:", M, sy); const sx = M + doc.getTextWidth("Authorized Signature:  ");
+  doc.setDrawColor(...INK); doc.setLineWidth(0.25); doc.line(sx, sy+0.8, sx+55, sy+0.8);
+  if(r.sigImg){ try{ const h = 12, w = Math.min(55, h*(r.sigRatio||3)); doc.addImage(r.sigImg, "PNG", sx+1, sy-h+0.6, w, h); }catch(e){} }
+  A("bold",8); doc.text("GEOWENGAS EVENT SOLUTIONS", M, sy+7);
+  A("normal",6.3,GREY); doc.text(`Issued ${new Date(r.issuedAt||Date.now()).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}`, M, sy+10.6);
+
+  // Stamp
+  const paid = r.balance <= 0.004;
+  const col = paid ? [31,122,77] : [178,106,0];
+  doc.setTextColor(...col); doc.setFont("helvetica","bold"); doc.setFontSize(15);
+  doc.text(paid ? "PAID IN FULL" : "PART PAYMENT", 118, sy+4, {angle:12});
+  doc.setFontSize(7); doc.text(dmy(r.date), 128, sy+8.2, {angle:12});
+
+  // QR code for verification
+  if(r.code && global.qrcode){
+    try{
+      const qr = global.qrcode(0, "M"); qr.addData(verifyUrl(r)); qr.make();
+      const n = qr.getModuleCount(), size = 22, cell = size/n, qx = W-M-size, qy = 98.5;
+      doc.setFillColor(255,255,255); doc.rect(qx-1, qy-1, size+2, size+2, "F");
+      doc.setFillColor(...INK);
+      for(let rr=0; rr<n; rr++) for(let cc=0; cc<n; cc++) if(qr.isDark(rr,cc)) doc.rect(qx+cc*cell, qy+rr*cell, cell+0.02, cell+0.02, "F");
+      A("bold",6,PURPLE); doc.text("Scan to verify", qx+size/2, qy+size+3.2, {align:"center"});
+      A("normal",5.8,GREY); doc.text(`Code ${r.code.slice(0,4)}-${r.code.slice(4)}`, qx+size/2, qy+size+6, {align:"center"});
+    }catch(e){}
+  }
+
+  // Footer
+  A("bold",7,PURPLE); doc.setCharSpace(0.3); doc.text(BIZ.tagline, W/2, H-5, {align:"center"}); doc.setCharSpace(0);
+  return doc;
+}
+async function verifyReceipt(no, code){
+  if(!DRIVE_UPLOAD.url) return {ok:false, error:"not set up"};
+  try{
+    const r = await fetch(`${DRIVE_UPLOAD.url}?action=verify&no=${encodeURIComponent(no)}&code=${encodeURIComponent(code)}`, {redirect:"follow"});
+    return await r.json();
+  }catch(e){ return {ok:false, error:String(e)}; }
+}
+
 /* ---------- sharing ---------- */
 async function shareOrDownload(blob, filename, text){
   const file = new File([blob], filename, {type: blob.type || "application/octet-stream"});
@@ -416,5 +560,6 @@ if("serviceWorker" in navigator && location.protocol === "https:"){
 }
 
 global.GW = {BIZ, PAYMENT, PAYMENT_NOTE, STD_CONDS, DEPOSIT_RATE, eventDates, esc, num, amt, money, iso, addDays, dmy, longDate, isFilled, totals, clientRows, checkCode,
-  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, invoiceFileName, checkDrive};
+  encodeQuote, decodeQuote, waNumber, paperHTML, buildPdf, readPdfRef, shareOrDownload, downloadBlob, safeName, toast, logoReady, uploadSigned, driveEnabled, signedFileName, invoiceFileName, checkDrive,
+  amountInWords, receiptDescription, randomCode, verifyUrl, buildReceiptPdf, verifyReceipt};
 })(window);

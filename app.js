@@ -290,7 +290,7 @@ $("addCond").onclick = () => { Q.conditions.push(""); renderConds(); changed(); 
 $("resetCond").onclick = () => { Q.conditions = STD_CONDS.slice(); renderConds(); changed(); toast("Standard conditions restored"); };
 
 /* ---------- preview ---------- */
-const STATUS_LABEL = {draft:"Draft", sent:"Sent", accepted:"Accepted", declined:"Declined"};
+const STATUS_LABEL = {draft:"Draft", sent:"Sent", accepted:"Accepted", part:"Part paid", paid:"Paid", declined:"Declined"};
 function renderPaper(){
   const t = totals(Q);
   $("paper").innerHTML = paperHTML(Q, Q.signed ? {signature:{name:Q.signed.name, date:Q.signed.date}} : {});
@@ -311,6 +311,12 @@ function renderPaper(){
     ii.hidden = false;
     ii.textContent = `Invoice ${Q.invoice.no} sent on ${new Date(Q.invoice.sentAt).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}` + (Q.invoice.drive === true ? " · saved to Google Drive" : Q.invoice.drive === false ? " · not yet in Google Drive (send it again to retry)" : "");
   } else ii.hidden = true;
+  const pi = $("payInfo"), rs = Q.receipts || [];
+  if(rs.length){
+    const paid = rs.reduce((s,r) => s + num(r.amount), 0), bal = Math.max(0, t.total - paid);
+    pi.hidden = false;
+    pi.textContent = `Paid ${money(paid)} of ${money(t.total)} (${rs.length} receipt${rs.length === 1 ? "" : "s"}, last ${rs[rs.length-1].no})` + (bal > 0.004 ? ` · Balance due ${money(bal)}` : " · Fully paid");
+  } else pi.hidden = true;
 }
 function renderCount(){
   const cfg = numCfg(), n = issuedCount(cfg);
@@ -360,6 +366,8 @@ $("btnMore").onclick = () => {
     ["copy","Copy text for WhatsApp","A short summary to paste in a chat"],
     ["download","Download quote PDF","Save the quote PDF on this phone"],
     ["invoice","Send invoice","The quote as an invoice, without signature lines"],
+    ["receipt","Send receipt","Record a payment and send the official receipt"],
+    ["pin","Receipt PIN","Needed for the QR check on receipts"],
     ["catalog","Price list","Your usual items and rates"],
     ["numbering","Quote numbering","Prefix and where the count continues"],
     ["drive","Check Google Drive link","Signed quotes are saved to Drive"],
@@ -372,7 +380,7 @@ $("btnMore").onclick = () => {
   $("modalBody").querySelectorAll("[data-m]").forEach(b => b.onclick = () => {
     const m = b.dataset.m; closeModal();
     ({new:askNew, saved:showSaved, sign:sendForSignature, signed:() => $("fileSigned").click(), copy:copySummary,
-      download:() => makePdf("download"), invoice:openInvoice, catalog:showCatalog, numbering:showNumbering, drive:checkDriveLink, backup:backup, restore:() => $("fileBackup").click()})[m]();
+      download:() => makePdf("download"), invoice:openInvoice, receipt:openReceipt, pin:showPin, catalog:showCatalog, numbering:showNumbering, drive:checkDriveLink, backup:backup, restore:() => $("fileBackup").click()})[m]();
   });
 };
 
@@ -390,7 +398,7 @@ function showSaved(){
   $("modalBody").querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
     const id = b.parentElement.dataset.id, act = b.dataset.act, all = savedQuotes(), q = all.find(x => x.id === id); if(!q) return;
     if(act === "open"){ Q = upgradeConds(migrateQuote(JSON.parse(JSON.stringify(q)))); LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Opened ${Q.no}`); }
-    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; delete n.invoice; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
+    if(act === "dup"){ const n = migrateQuote(JSON.parse(JSON.stringify(q))); n.id = "q"+Date.now(); n.no = nextQuoteNo(); n.date = iso(new Date()); n.valid = addDays(n.date,14); n.status = "draft"; delete n._validTouched; delete n._noEdited; delete n.invoice; delete n.receipts; upgradeConds(n); delete n.signed; delete n.sentCheck; Q = n; LS.set("gw_draft", Q); renderAll(); closeModal(); toast(`Copied into new quote ${Q.no}`); }
     if(act === "del"){
       const wrap = b.parentElement; wrap.innerHTML = `<span class="confirm">Delete ${esc(q.no)}? <button class="btn sm danger" type="button" data-yes>Delete</button><button class="btn sm ghost" type="button" data-no>Keep</button></span>`;
       wrap.querySelector("[data-yes]").onclick = () => { LS.set("gw_quotes", all.filter(x => x.id !== id)); renderCount(); showSaved(); toast(`Deleted ${q.no}`); };
@@ -526,6 +534,165 @@ async function sendInvoice(mode){
     if(Q.id === id){ Q.invoice.drive = up.ok; LS.set("gw_draft", Q); renderPaper(); }
     setTimeout(() => toast(up.ok ? `Invoice ${inv.no} saved to Google Drive.` : "Couldn't reach Google Drive. Send the invoice again later to save it there.", 4000), mode === "download" ? 1200 : 2500);
   }
+}
+
+/* ---------- receipts ---------- */
+const RC = window.GW;
+const rcCounterKey = () => "gw_counter_rc_" + thisYear();
+function allReceipts(){ const out = []; savedQuotes().forEach(q => (q.receipts||[]).forEach(r => out.push(r))); (Q.receipts||[]).forEach(r => { if(!out.some(x => x.no === r.no)) out.push(r); }); return out; }
+function nextReceiptNo(){
+  const pre = `RC-${thisYear()}-`; let max = LS.get(rcCounterKey(), 0);
+  allReceipts().forEach(r => { if(r.no && r.no.startsWith(pre)){ const n = +r.no.slice(pre.length); if(n > max) max = n; } });
+  return pre + String(max + 1).padStart(3, "0");
+}
+function paidSoFar(q){ return (q.receipts||[]).reduce((s,r) => s + num(r.amount), 0); }
+const RC_METHODS = ["MTN Mobile Money", "Telecel Cash", "ECOBANK Transfer", "GT Bank Transfer", "Other"];
+const rcPin = () => LS.get("gw_receipt_pin", "");
+
+$("btnReceipt").onclick = openReceipt;
+$("btnReceipt2").onclick = openReceipt;
+function openReceipt(){
+  if(!Q.items.some(isFilled)){ toast("Add at least one item first."); return; }
+  if(Q.example){ toast("This is the example quote. Start a new quote for a real client."); return; }
+  const t = totals(Q), paid = paidSoFar(Q), bal = Math.max(0, Math.round((t.total - paid)*100)/100);
+  const saved = LS.get("gw_my_sig", null);
+  const prev = (Q.receipts||[]).map((r,i) => `<div class="saved"><div style="min-width:0"><div class="t">${esc(r.no)} · ${money(r.amount)}</div>
+      <div class="s">${esc(dmy(r.date))} · ${esc(r.method)} · ${r.registered ? "✓ verifiable" : "not yet registered for QR check"}</div></div>
+      <div class="a"><button class="btn sm" type="button" data-rc-again="${i}">Send again</button>${r.registered ? "" : `<button class="btn sm ghost" type="button" data-rc-reg="${i}">Register</button>`}</div></div>`).join("");
+  openModal(`<h3>Send receipt <button class="btn sm ghost" id="mClose" type="button">Cancel</button></h3>
+    <div class="inv-sum"><span>Quote total</span><b>${money(t.total)}</b><span>Paid so far</span><b>${money(paid)}</b><span>Balance</span><b>${money(bal)}</b></div>
+    ${prev ? `<div class="saved-list">${prev}</div>` : ""}
+    ${bal <= 0 ? `<p class="okbox">This quote is fully paid. You can still resend an earlier receipt above.</p>` : `
+    <div class="grid">
+      <div class="f"><label for="rcNo">Receipt no.</label><input id="rcNo" value="${esc(nextReceiptNo())}"></div>
+      <div class="f"><label for="rcDate">Date</label><input id="rcDate" type="date" value="${iso(new Date())}"></div>
+      <div class="f wide"><label for="rcFrom">Received from</label><input id="rcFrom" value="${esc((Q.client.name||"").trim())}"></div>
+      <div class="f"><label for="rcAmt">Amount received (GHC)</label><input id="rcAmt" type="number" min="0" step="0.01" inputmode="decimal" value="${bal.toFixed(2)}"></div>
+      <div class="f"><label for="rcMethod">Payment method</label><select id="rcMethod"><option value="">Choose…</option>${RC_METHODS.map(m => `<option>${esc(m)}</option>`).join("")}</select></div>
+      <div class="f wide"><label for="rcRef">Transaction / reference no. (optional)</label><input id="rcRef" autocomplete="off" placeholder="e.g. MoMo transaction ID"></div>
+      <div class="f wide"><label for="rcDesc">For / Description</label><textarea id="rcDesc" rows="2">${esc(RC.receiptDescription(Q))}</textarea></div>
+    </div>
+    <div class="rc-live" id="rcLive"></div>
+    <div class="f"><label for="rcSig">Authorized signature</label>
+      <div class="sigpad"><canvas id="rcSig" aria-label="Signature box"></canvas><div class="hintline"></div><div class="ph" id="rcPh">Sign above the line</div></div>
+      <div class="confirm">${saved ? `<button class="btn sm" id="rcUseSaved" type="button">Use my saved signature</button>` : ""}<button class="btn sm ghost" id="rcClear" type="button">Clear</button>
+      <label class="check small" style="margin:0"><input type="checkbox" id="rcRemember" ${saved ? "" : "checked"}> Remember my signature on this phone</label></div>
+    </div>
+    ${rcPin() ? "" : `<div class="f"><label for="rcPin">Receipt PIN</label><input id="rcPin" type="password" autocomplete="off" placeholder="Needed once, for the QR check"></div>`}
+    <p class="alert" id="rcErr" hidden></p>
+    <div class="confirm"><button class="btn primary" id="rcSend" type="button">Send receipt</button><button class="btn" id="rcDl" type="button">Download</button></div>`}`);
+  $("mClose").onclick = closeModal;
+  $("modalBody").querySelectorAll("[data-rc-again]").forEach(b => b.onclick = () => resendReceipt(+b.dataset.rcAgain));
+  $("modalBody").querySelectorAll("[data-rc-reg]").forEach(b => b.onclick = () => registerReceipt(Q.id, +b.dataset.rcReg, true));
+  if(bal <= 0) return;
+  const live = () => {
+    const a = num($("rcAmt").value), after = Math.round((t.total - paid - a)*100)/100;
+    $("rcLive").innerHTML = `<div><span>In words</span><b>${esc(RC.amountInWords(a))}</b></div><div><span>For</span><b>${esc([invoiceNoFor(Q), Q.no].join(" / "))}</b></div><div><span>Balance due after this</span><b class="${after < -0.004 ? "neg" : ""}">${after < -0.004 ? "Overpaid by " + money(-after) : money(Math.max(0, after))}</b></div>`;
+  };
+  $("rcAmt").addEventListener("input", live); live();
+  const pad = makePad($("rcSig"), $("rcPh"));
+  $("rcClear").onclick = () => pad.clear();
+  if($("rcUseSaved")) $("rcUseSaved").onclick = () => pad.load(saved);
+  $("rcSend").onclick = () => issueReceipt("send", pad);
+  $("rcDl").onclick = () => issueReceipt("download", pad);
+}
+
+function makePad(c, ph){
+  let ctx, drawing = false, last = null, ink = false, loaded = null;
+  const size = () => { const r = c.getBoundingClientRect(), dpr = Math.max(1, window.devicePixelRatio||1); c.width = Math.round(r.width*dpr); c.height = Math.round(r.height*dpr); ctx = c.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1b1640"; ctx.fillStyle = "#1b1640"; };
+  size();
+  const pos = e => { const r = c.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  c.addEventListener("pointerdown", e => { e.preventDefault(); try{ c.setPointerCapture(e.pointerId); }catch(_){} if(loaded){ clear(); } drawing = true; last = pos(e); ctx.beginPath(); ctx.arc(last.x,last.y,1.2,0,Math.PI*2); ctx.fill(); ink = true; ph.hidden = true; });
+  c.addEventListener("pointermove", e => { if(!drawing) return; e.preventDefault(); const p = pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last = p; });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev => c.addEventListener(ev, () => drawing = false));
+  function clear(){ const r = c.getBoundingClientRect(); ctx.clearRect(0,0,r.width,r.height); ink = false; loaded = null; ph.hidden = false; }
+  function load(sig){ clear(); const im = new Image(); im.onload = () => { const r = c.getBoundingClientRect(); const h = Math.min(r.height*0.7, (r.width*0.8)/sig.ratio), w = h*sig.ratio; ctx.drawImage(im, (r.width-w)/2, (r.height-h)/2 - 10, w, h); }; im.src = sig.img; loaded = sig; ink = true; ph.hidden = true; }
+  function image(){
+    if(loaded) return loaded;
+    if(!ink) return null;
+    // crop to the ink
+    const d = ctx.getImageData(0,0,c.width,c.height).data; let x0=c.width, y0=c.height, x1=0, y1=0;
+    for(let y=0;y<c.height;y+=2) for(let x=0;x<c.width;x+=2){ if(d[(y*c.width+x)*4+3] > 20){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    if(x1 <= x0) return null;
+    const pad = 10, sx = Math.max(0,x0-pad), sy = Math.max(0,y0-pad), sw = Math.min(c.width-sx, x1-x0+2*pad), sh = Math.min(c.height-sy, y1-y0+2*pad);
+    const scale = Math.min(1, 360/sw), out = document.createElement("canvas"); out.width = Math.round(sw*scale); out.height = Math.round(sh*scale);
+    out.getContext("2d").drawImage(c, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return {img: out.toDataURL("image/png"), ratio: out.width/out.height};
+  }
+  return {clear, load, image};
+}
+
+async function issueReceipt(mode, pad){
+  const err = $("rcErr"); err.hidden = true;
+  const t = totals(Q), paid = paidSoFar(Q);
+  const r = {
+    no: $("rcNo").value.trim(), date: $("rcDate").value, from: $("rcFrom").value.trim(),
+    amount: Math.round(num($("rcAmt").value)*100)/100, method: $("rcMethod").value, ref: $("rcRef").value.trim(),
+    desc: $("rcDesc").value.trim(), quoteNo: Q.no, quoteId: Q.id, invoiceNo: invoiceNoFor(Q),
+    total: t.total, issuedAt: Date.now(), code: RC.randomCode(8)
+  };
+  r.paidToDate = Math.round((paid + r.amount)*100)/100;
+  r.balance = Math.max(0, Math.round((t.total - r.paidToDate)*100)/100);
+  const sig = pad.image();
+  const problem = !r.no ? "Enter a receipt number." : allReceipts().some(x => x.no === r.no) ? `${r.no} is already used. Use ${nextReceiptNo()}.` :
+    !r.date ? "Choose the date." : !r.from ? "Enter who paid." : !(r.amount > 0) ? "Enter the amount received." :
+    !r.method ? "Choose the payment method." : !sig ? "Please sign in the box." : "";
+  if(problem){ err.textContent = problem; err.hidden = false; return; }
+  if($("rcPin") && $("rcPin").value.trim()) LS.set("gw_receipt_pin", $("rcPin").value.trim());
+  if($("rcRemember").checked) LS.set("gw_my_sig", sig);
+  r.sigImg = sig.img; r.sigRatio = sig.ratio;
+  if(!window.jspdf || !window.jspdf.jsPDF){ toast("The PDF tool didn't load. Close the app and open it again."); return; }
+  await logoReady;
+  let blob;
+  try{ blob = RC.buildReceiptPdf(r).output("blob"); }
+  catch(e){ console.error(e); err.textContent = "Couldn't make the receipt. Please try again."; err.hidden = false; return; }
+  // record it on the quote
+  Q.receipts = [...(Q.receipts||[]), r];
+  if(Q.status !== "declined") Q.status = r.balance <= 0 ? "paid" : "part";
+  { const m = /^RC-(\d{4})-(\d+)$/.exec(r.no); if(m){ const k = "gw_counter_rc_" + m[1]; LS.set(k, Math.max(LS.get(k,0), +m[2])); } }
+  saveQuote(true); fillFields(); renderPaper();
+  closeModal();
+  const name = receiptFileName(r);
+  if(mode === "download"){ window.GW.downloadBlob(blob, name); toast(`Downloaded ${name}`); }
+  else {
+    const res = await shareOrDownload(blob, name, `Hello${r.from ? " " + r.from : ""}, thank you for your payment of ${money(r.amount)}. Here is your receipt ${r.no} from GEOWENGAS Event Solutions.` + (r.balance > 0 ? ` Balance due: ${money(r.balance)}.` : " Your booking is fully paid."));
+    if(res === "downloaded") toast(`Downloaded ${name}. Attach it in WhatsApp.`, 4500);
+  }
+  registerReceipt(Q.id, Q.receipts.length - 1, false, blob);
+}
+const receiptFileName = r => `${r.no}_${safeName(r.from)||"Client"}_RECEIPT.pdf`;
+
+async function registerReceipt(quoteId, idx, loud, blob){
+  if(!window.GW.driveEnabled()) return;
+  const list = savedQuotes(), qi = list.findIndex(x => x.id === quoteId); if(qi < 0) return;
+  const r = list[qi].receipts[idx]; if(!r) return;
+  if(!blob){ await logoReady; blob = RC.buildReceiptPdf(r).output("blob"); }
+  const up = await window.GW.uploadSigned(blob, receiptFileName(r), {
+    action:"receipt", kind:"receipt", pin: rcPin(), from:"Mum's app",
+    receipt:{no:r.no, code:r.code, date:r.date, receivedFrom:r.from, amount:r.amount.toFixed(2), method:r.method, ref:r.ref, desc:r.desc,
+      invoiceNo:r.invoiceNo, quoteNo:r.quoteNo, balance:r.balance.toFixed(2), total:r.total.toFixed(2), issuedAt:new Date(r.issuedAt).toISOString()}
+  });
+  r.registered = !!up.ok; list[qi].receipts[idx] = r; LS.set("gw_quotes", list);
+  if(Q.id === quoteId){ Q.receipts = list[qi].receipts; LS.set("gw_draft", Q); renderPaper(); }
+  const msg = up.ok ? `Receipt ${r.no} saved to Google Drive and ready for QR checks.`
+    : /pin/i.test(up.error||"") ? "Receipt sent, but the Receipt PIN is wrong or missing, so its QR check won't work yet. Fix it in More → Receipt PIN, then tap Register."
+    : "Receipt sent, but Google Drive couldn't be reached. Open Send receipt later and tap Register.";
+  setTimeout(() => toast(msg, 6000), loud ? 0 : 2500);
+}
+async function resendReceipt(i){
+  const r = (Q.receipts||[])[i]; if(!r) return;
+  await logoReady;
+  const blob = RC.buildReceiptPdf(r).output("blob"); closeModal();
+  const res = await shareOrDownload(blob, receiptFileName(r), `Receipt ${r.no} from GEOWENGAS Event Solutions.`);
+  if(res === "downloaded") toast(`Downloaded ${receiptFileName(r)}`);
+}
+function showPin(){
+  openModal(`<h3>Receipt PIN <button class="btn sm ghost" id="mClose" type="button">Cancel</button></h3>
+    <p class="hint">The PIN lets this phone register receipts so their QR code can be checked. It must match ISSUER_PIN in the Google Apps Script.</p>
+    <div class="f"><label for="pinIn">PIN</label><input id="pinIn" type="password" autocomplete="off" value="${esc(rcPin())}"></div>
+    <div class="confirm"><button class="btn primary" id="pinSave" type="button">Save PIN</button></div>`);
+  $("mClose").onclick = closeModal;
+  $("pinSave").onclick = () => { LS.set("gw_receipt_pin", $("pinIn").value.trim()); closeModal(); toast("Receipt PIN saved on this phone."); };
 }
 
 /* ---------- send for signature ---------- */

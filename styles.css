@@ -119,6 +119,13 @@ input[readonly]{background:var(--surface-2);color:var(--muted)}
 .inv-paper .paper{box-shadow:none;padding:16px}
 .inv-sum{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:15px}
 .inv-sum span{color:var(--muted)}
+.chip.part{background:var(--gold-soft);color:var(--gold)}
+.chip.paid{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.rc-live{display:grid;gap:6px;background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:14px}
+.rc-live div{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px}
+.rc-live span{color:var(--muted)}
+.rc-live b.neg{color:var(--danger)}
+@media (max-width:640px){ .rc-live div{grid-template-columns:1fr} #btnMore{grid-column:1/-1} }
 .num-preview{font-family:var(--serif);font-size:22px;color:var(--plum);font-weight:700}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px}
 .check input{width:22px;height:22px;min-height:0;flex:none;margin-top:1px}

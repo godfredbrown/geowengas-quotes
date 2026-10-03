@@ -23,6 +23,7 @@
       <button class="btn" id="btnSave" type="button">Save</button>
       <button class="btn primary" id="btnSend" type="button">Send Quote</button>
       <button class="btn gold" id="btnInvoice" type="button">Send Invoice</button>
+      <button class="btn" id="btnReceipt" type="button">Send Receipt</button>
       <button class="btn" id="btnMore" type="button" aria-haspopup="dialog">More ▾</button>
     </div>
   </div>
@@ -42,11 +43,12 @@
         <div class="f"><label for="qDate">Date</label><input id="qDate" type="date"></div>
         <div class="f"><label for="qValid">Valid until</label><input id="qValid" type="date"></div>
         <div class="f"><label for="qStatus">Status</label>
-          <select id="qStatus"><option value="draft">Draft</option><option value="sent">Sent</option><option value="accepted">Accepted</option><option value="declined">Declined</option></select>
+          <select id="qStatus"><option value="draft">Draft</option><option value="sent">Sent</option><option value="accepted">Accepted</option><option value="part">Part paid</option><option value="paid">Paid</option><option value="declined">Declined</option></select>
         </div>
       </div>
       <div id="signedInfo" hidden style="margin-top:12px"></div>
       <div id="invoiceInfo" class="note" hidden></div>
+      <div id="payInfo" class="note" hidden></div>
       <div class="count-row">
         <div class="count-box"><b id="cntIssued">0</b><span id="cntLabel">quotes issued</span></div>
         <div class="count-box"><b id="cntNext">QT-2026-001</b><span>next quote number</span></div>
@@ -114,6 +116,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn primary" id="btnSend2" type="button" style="flex:1">Send Quote</button>
       <button class="btn" id="btnInvoice2" type="button" style="flex:1">Send Invoice</button>
+      <button class="btn" id="btnReceipt2" type="button" style="flex:1">Send Receipt</button>
       <button class="btn gold" id="btnSign2" type="button" style="flex:1">Send for signature</button>
     </div>
   </aside>
@@ -126,6 +129,7 @@
 
 <script src="vendor/jspdf.umd.min.js"></script>
 <script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="vendor/qrcode.js"></script>
 <script src="core.js"></script>
 <script src="app.js"></script>
 </body>
